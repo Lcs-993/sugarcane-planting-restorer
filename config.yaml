@@ -1,0 +1,33 @@
+# Configuração de exemplo do motor de correção de linhas de plantio.
+# Nenhum valor abaixo foi validado em campo: todos os marcados como HIPÓTESE são
+# parâmetros configuráveis a definir no piloto (docs/escopo.md, regras de evidência).
+
+# Índice de vegetação: exg (padrão), vari ou ndvi. Escolha de projeto, não validada.
+indice: exg
+bandas_rgb: [1, 2, 3]      # numeração do rasterio, base 1
+banda_nir: null            # obrigatória se indice: ndvi
+
+# Estações e busca
+espacamento_estacoes_m: 10.0   # HIPÓTESE de partida do projeto (faixa de 5 a 10 m)
+semijanela_busca_m: 0.50       # HIPÓTESE de partida do projeto
+
+# Regras geométricas
+espacamento_gemeas_ref_m: 1.50          # premissa do projeto
+tolerancia_espacamento_gemeas_m: 0.15   # HIPÓTESE, sem fonte lida
+largura_faixa_min_m: 0.45               # premissa do projeto
+largura_faixa_max_m: 0.50               # premissa do projeto
+tolerancia_largura_m: 0.10              # HIPÓTESE, sem fonte lida
+
+# Suavização e ruído
+janela_mediana: 3          # HIPÓTESE; em estações, ímpar
+limite_variacao_m: 0.30    # HIPÓTESE; absoluto entre estações vizinhas
+fator_spline: 0.0          # HIPÓTESE; 0 = spline interpolador, > 0 suaviza
+
+# Talhão e perfil
+buffer_interno_m: 5.0              # HIPÓTESE
+comprimento_amostra_m: 1.0         # HIPÓTESE
+fracao_duvidosa_revisao: 0.30      # HIPÓTESE; limiar de revisão manual
+
+# Campos identificadores nas camadas de entrada
+campo_id_talhao: id
+campo_id_passada: id
