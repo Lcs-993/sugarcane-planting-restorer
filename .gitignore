@@ -1,0 +1,19 @@
+# Rasters pesados
+*.tif
+*.tiff
+*.jp2
+*.ecw
+
+# Dados: ignorar todo o conteúdo, exceto os .gitkeep
+dados/**
+!dados/**/
+!dados/**/.gitkeep
+
+# PDFs de artigos ficam fora do Git por direitos autorais
+referencias/pdfs/*
+!referencias/pdfs/.gitkeep
+
+# Python
+__pycache__/
+.venv/
+*.egg-info/
