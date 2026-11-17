@@ -48,7 +48,8 @@ def amostrar_perfil(
     """
     passo = fonte.resolucao_m
     t_max = cfg.espacamento_gemeas_ref_m / 2.0 + _meia_extensao_m(cfg)
-    t = np.arange(-t_max, t_max + passo / 2.0, passo)
+    n_t = int(np.ceil(t_max / passo))
+    t = np.arange(-n_t, n_t + 1) * passo  # grade simétrica em torno da linha projetada (inclui t = 0)
     n_u = max(int(round(cfg.comprimento_amostra_m / passo)), 1)
     u = (np.arange(n_u) - (n_u - 1) / 2.0) * passo
     T, U = np.meshgrid(t, u, indexing="ij")
