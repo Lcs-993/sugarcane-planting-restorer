@@ -157,3 +157,16 @@ def erros_laterais(linha_corrigida: LineString, indice_passada: int, deriva, aju
     y_proj = EIXOS_Y[indice_passada]
     y_real = y_proj + deriva(xs_loc) + ajuste_dir_m / 2.0
     return np.abs(y_corr - y_real), np.abs(y_proj - y_real)
+
+
+def preparar(caso: Caso, cfg):
+    """Entrada, fonte do índice e fonte binária do talhão T1 de um caso sintético."""
+    from linhas_plantio.entrada import carregar_entrada
+    from linhas_plantio.preprocessamento import abrir_fonte_indice, recortar_talhao
+    from linhas_plantio.segmentacao import abrir_fonte_binaria, calcular_limiar_otsu
+
+    dados = carregar_entrada(caso.raster, caso.talhoes, caso.linhas, cfg)
+    fonte = abrir_fonte_indice(caso.raster, cfg)
+    area = recortar_talhao(dados.talhoes[0], cfg)
+    fb = abrir_fonte_binaria(fonte, area, calcular_limiar_otsu(fonte, area))
+    return dados, fonte, fb
