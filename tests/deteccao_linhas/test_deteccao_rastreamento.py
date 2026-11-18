@@ -90,3 +90,17 @@ def test_ordem_independente_da_entrada():
     a = rastrear(rs, CFG)
     b = rastrear(list(reversed(rs)), CFG)
     assert [len(t.pontos) for t in a] == [len(t.pontos) for t in b] == [6, 6]
+
+
+def test_bloco_recortado_com_ponto_medio_fora_do_poligono_continua_a_trilha():
+    # bloco 4 recortado por uma diagonal: o ponto (0, y_meio) cai fora do polígono, mas a fileira o atravessa
+    rs = [_res(k, [0.0]) for k in range(4)]
+    k = 4
+    bl = Bloco("B004", "R2", (0.0, 0.0), (0.0, 1.0), (-1.0, 0.0), 40.0, 10.0, -50.0, 2.0, 45.0,
+               box(-60, 40, 2, 50).intersection(__import__("shapely.geometry", fromlist=["Polygon"]).Polygon(
+                   [(-60, 40), (-60, 50), (2, 50)])))
+    pos = (PosicaoFileira("B004", 0.0, 0.0, 45.0, 0.48, 0.8, 1.0, 1.0, 1.5, False, 0.9),)
+    rs.append(ResultadoPente(bl, pos, 0.0))
+    rs += [_res(k, [0.0]) for k in range(5, 8)]
+    tr = rastrear(rs, Config(comprimento_min_fileira_m=10.0))
+    assert len(tr) == 1 and len(tr[0].pontos) == 8

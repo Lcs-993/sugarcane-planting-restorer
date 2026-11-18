@@ -2,8 +2,8 @@
 
 Decisões de implementação (hipóteses, sem fonte lida):
 - processa blocos em ordem de s_global_m; para cada bloco, as trilhas "elegíveis" são as que ficam atrás
-  dele (0 < ds <= (max_blocos_falha + 1) * passo_bloco_m + comprimento_bloco_m / 2) e cuja projeção cai
-  no polígono do bloco (com folga de tolerancia_ligacao_m);
+  dele (0 < ds <= (max_blocos_falha + 1) * passo_bloco_m + comprimento_bloco_m / 2) e cujo rastro projetado,
+  no intervalo s do bloco, toca o polígono do bloco (com folga de tolerancia_ligacao_m);
 - projeção do último ponto da trilha ao bloco: ao longo da direção média entre a do último bloco e a do atual;
 - associação um-para-um por atribuição de custo mínimo (distância lateral no quadro do bloco atual), aceita
   se <= cfg.tolerancia_ligacao_m;
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
-from shapely.geometry import Point
+from shapely.geometry import LineString
 
 from .config import Config
 from .qualidade import classificar_ponto
@@ -88,8 +88,14 @@ def rastrear_com_descartes(resultados: list[ResultadoPente], cfg: Config) -> tup
             ds, proj = _projetar(a, b)
             if ds <= 0 or ds > (cfg.max_blocos_falha + 1) * cfg.passo_bloco_m + ds_max_extra:
                 continue
-            if poli is not None and not poli.contains(Point(proj)):
-                continue
+            if poli is not None:
+                # o rastro da fileira projetada ao longo do intervalo s do bloco deve tocar o polígono
+                # (o ponto no meio do intervalo pode cair fora de um bloco recortado pela região)
+                m = b.comprimento_m / 2.0
+                rastro = LineString([(proj[0] - m * b.u[0], proj[1] - m * b.u[1]),
+                                     (proj[0] + m * b.u[0], proj[1] + m * b.u[1])])
+                if not poli.intersects(rastro):
+                    continue
             eleg.append((a, proj))
         pos = list(res.posicoes)
         casadas: dict[int, int] = {}
