@@ -66,6 +66,65 @@ def marcar_saltos_laterais(trilha: Trilha, cfg: Config) -> Trilha:
     return Trilha(pontos=tuple(novos))
 
 
+def _lateral_da_corda(xy: np.ndarray) -> np.ndarray:
+    """Distância assinada de cada ponto interno à corda entre seus vizinhos (0 nas pontas)."""
+    e = np.zeros(len(xy))
+    a, b, c = xy[:-2], xy[1:-1], xy[2:]
+    v = c - a
+    norma = np.hypot(v[:, 0], v[:, 1])
+    norma[norma == 0] = 1.0
+    e[1:-1] = ((b[:, 0] - a[:, 0]) * v[:, 1] - (b[:, 1] - a[:, 1]) * v[:, 0]) / norma
+    return e
+
+
+def _curvatura(xy: np.ndarray) -> np.ndarray:
+    """Curvatura de Menger (1/m) em cada ponto interno; 0 nas pontas."""
+    k = np.zeros(len(xy))
+    a, b, c = xy[:-2], xy[1:-1], xy[2:]
+    ab, bc, ca = np.hypot(*(b - a).T), np.hypot(*(c - b).T), np.hypot(*(c - a).T)
+    dobro_area = np.abs((b[:, 0] - a[:, 0]) * (c[:, 1] - a[:, 1]) - (b[:, 1] - a[:, 1]) * (c[:, 0] - a[:, 0]))
+    den = ab * bc * ca
+    den[den == 0] = np.inf
+    k[1:-1] = 2.0 * dobro_area / den
+    return k
+
+
+def marcar_saltos_curvos(trilha: Trilha, cfg: Config) -> Trilha:
+    """Versão para fileiras em curva (modo_blocos="faixas"): em vez da reta de melhor ajuste da trilha toda,
+    mede o desvio lateral de cada ponto medido à corda entre seus vizinhos medidos e o compara com a
+    mediana desses desvios numa janela de 5 pontos (a mediana absorve a curvatura, que dá um desvio de
+    corda regular). Marca 'duvidoso' o ponto cujo desvio difere da mediana por mais de cfg.limite_variacao_m
+    e que é o maior da vizinhança. Se cfg.curvatura_duvidosa_1_m > 0, marca também 'duvidoso' o trecho cuja
+    curvatura (Menger, mediana de 3 pontos) passa desse limite: o algoritmo é tido como não confiável ali.
+    HIPÓTESE sem fonte lida. A posição nunca é alterada; pontos 'interpolado' não entram."""
+    idx = [i for i, p in enumerate(trilha.pontos) if p.status != "interpolado"]
+    if len(idx) < 3:
+        return trilha
+    xy = np.array([[trilha.pontos[i].x, trilha.pontos[i].y] for i in idx])
+    e = _lateral_da_corda(xy)
+    n = len(idx)
+    dev = np.zeros(n)
+    for k in range(1, n - 1):
+        lo, hi = max(1, k - 2), min(n - 1, k + 3)
+        dev[k] = e[k] - float(np.median(e[lo:hi]))
+    marca = np.zeros(n, dtype=bool)
+    for k in range(1, n - 1):
+        viz = [abs(dev[j]) for j in (k - 1, k + 1) if 0 < j < n - 1]
+        if abs(dev[k]) > cfg.limite_variacao_m and all(abs(dev[k]) >= v for v in viz):
+            marca[k] = True
+    if cfg.curvatura_duvidosa_1_m > 0 and n >= 3:
+        kap = _curvatura(xy)
+        sua = kap.copy()
+        for k in range(1, n - 1):
+            sua[k] = np.median(kap[max(1, k - 1):min(n - 1, k + 2)])
+        marca |= sua > cfg.curvatura_duvidosa_1_m
+    novos = list(trilha.pontos)
+    for k, i in enumerate(idx):
+        if marca[k] and novos[i].status == "detectado":
+            novos[i] = replace(novos[i], status="duvidoso")
+    return Trilha(pontos=tuple(novos))
+
+
 def avaliar_trilha(trilha: Trilha, talhao: str, cfg: Config) -> FileiraAvaliada:
     """Monta a geometria (todos os pontos, inclusive duvidosos: posição medida, marcada),
     comprimento_m, confianca_media e frac_duvidosa."""
@@ -81,4 +140,5 @@ def avaliar_trilha(trilha: Trilha, talhao: str, cfg: Config) -> FileiraAvaliada:
 
 def avaliar_trilhas(trilhas: list[Trilha], talhao: str, cfg: Config) -> list[FileiraAvaliada]:
     """Aplica marcar_saltos_laterais e avaliar_trilha a todas as trilhas do talhão."""
-    return [avaliar_trilha(marcar_saltos_laterais(t, cfg), talhao, cfg) for t in trilhas]
+    marcar = marcar_saltos_curvos if cfg.modo_blocos == "faixas" else marcar_saltos_laterais
+    return [avaliar_trilha(marcar(t, cfg), talhao, cfg) for t in trilhas]

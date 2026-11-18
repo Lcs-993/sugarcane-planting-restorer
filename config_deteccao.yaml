@@ -56,4 +56,17 @@ limite_variacao_m: 0.30            # HIPÓTESE
 janela_mediana: 3                  # HIPÓTESE; ímpar, em blocos
 pesos_confianca: [0.3, 0.3, 0.2, 0.2]   # HIPÓTESE (H5): contraste, coerência, largura, ajuste ao pente
 
+# Fileiras em curva (docs/diagnostico-curvas.md). Para reproduzir o comportamento anterior: modo_blocos: regiao
+modo_blocos: faixas                # HIPÓTESE; "regiao" = uma direção por região de regiao_m, blocos retos
+passo_bloco_faixas_m: 5.0          # HIPÓTESE; passo dos blocos no modo faixas (sobreposição de 50%)
+janela_direcao_m: 15.0             # HIPÓTESE; janelas do campo de direção
+passo_angulo_grosso_campo_graus: 3.0   # HIPÓTESE
+passo_angulo_fino_campo_graus: 0.5     # HIPÓTESE
+max_pontos_janela_direcao: 30000   # HIPÓTESE
+raio_suavizacao_direcao_m: 25.0    # HIPÓTESE; vizinhança do ajuste local do campo
+desvio_campo_max_graus: 8.0        # HIPÓTESE; janela que destoa do ajuste local é substituída por ele (marcada)
+largura_corredor_m: 15.0           # HIPÓTESE; largura de cada faixa de blocos
+margem_lateral_bloco_m: 1.5        # HIPÓTESE
+curvatura_duvidosa_1_m: 0.04       # HIPÓTESE; 1/raio; trecho mais curvo que isto vira duvidoso (0 = desligado)
+
 campo_id_talhao: id
