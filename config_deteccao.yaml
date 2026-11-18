@@ -1,0 +1,58 @@
+# Configuração de exemplo da detecção de linhas (src/deteccao_linhas).
+# Nenhum valor abaixo foi validado em campo: todos os marcados como HIPÓTESE são
+# parâmetros configuráveis a ajustar no piloto (docs/escopo-deteccao.md, seção 6).
+
+# Índice e binarização
+indice: exg                        # escolha de projeto, não validada
+variante_exg: normalizado          # HIPÓTESE
+bandas_rgb: [1, 2, 3]              # numeração do rasterio, base 1
+resolucao_trabalho_m: 0.06         # HIPÓTESE; redução por média de área
+n_bins_otsu: 256                   # HIPÓTESE
+buffer_interno_m: 5.0              # HIPÓTESE
+perfil_sobre: binario              # HIPÓTESE; "indice" não implementado
+
+# Orientação
+regiao_m: 150.0                    # HIPÓTESE
+area_minima_regiao_m2: 2000.0      # HIPÓTESE
+passo_angulo_grosso_graus: 1.0     # HIPÓTESE
+passo_angulo_fino_graus: 0.1       # HIPÓTESE
+sg_janela: 11                      # HIPÓTESE; ímpar
+sg_ordem: 3                        # HIPÓTESE
+desvio_angular_max_graus: 15.0     # HIPÓTESE
+confianca_min_direcao: 0.15        # HIPÓTESE (acrescentado na implementação)
+max_pontos_orientacao: 200000      # HIPÓTESE (acrescentado na implementação)
+
+# Perfil lateral
+comprimento_bloco_m: 10.0          # HIPÓTESE central (H1)
+passo_bloco_m: 10.0                # HIPÓTESE
+bin_lateral_m: 0.06                # HIPÓTESE
+subtrecho_m: 1.0                   # HIPÓTESE
+limiar_presenca_subtrecho: 0.10    # HIPÓTESE
+cobertura_min_bloco: 0.30          # HIPÓTESE (acrescentado na implementação)
+lateral_minima_bloco_m: 3.0        # HIPÓTESE (acrescentado na implementação)
+
+# Pente
+espacamento_fileiras_ref_m: 1.50   # premissa do projeto
+tolerancia_espacamento_m: 0.20     # HIPÓTESE
+semijanela_dente_m: 0.25           # HIPÓTESE
+dentes_por_janela_fase: 4          # HIPÓTESE
+proeminencia_min: 0.10             # HIPÓTESE
+largura_faixa_min_m: 0.45          # premissa do projeto
+largura_faixa_max_m: 0.50          # premissa do projeto
+tolerancia_largura_m: 0.15         # HIPÓTESE
+sigma_suavizacao_perfil_m: 0.10    # HIPÓTESE (acrescentado na implementação)
+distancia_min_picos_m: 0.40        # HIPÓTESE (acrescentado na implementação)
+distancia_fusao_picos_m: 0.90      # HIPÓTESE (acrescentado na implementação)
+
+# Rastreamento
+tolerancia_ligacao_m: 0.30         # HIPÓTESE
+max_blocos_falha: 3                # HIPÓTESE
+comprimento_min_fileira_m: 30.0    # HIPÓTESE
+
+# Qualidade
+limiar_confianca: 0.50             # HIPÓTESE
+limite_variacao_m: 0.30            # HIPÓTESE
+janela_mediana: 3                  # HIPÓTESE; ímpar, em blocos
+pesos_confianca: [0.3, 0.3, 0.2, 0.2]   # HIPÓTESE (H5): contraste, coerência, largura, ajuste ao pente
+
+campo_id_talhao: id
