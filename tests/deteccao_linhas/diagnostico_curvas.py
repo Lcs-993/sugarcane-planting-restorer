@@ -261,7 +261,17 @@ def _instalar_orientacao(cen: dict, oraculo: bool, registro: list) -> object:
             novas.append(r)
         return novas, u_ref
     cli.estimar_direcoes = envolto
-    return original
+    campo_orig = cli.estimar_campo_direcao
+
+    def envolto_campo(fb, area, cfg):  # modo "faixas": registra o erro de orientação de cada janela
+        campo, janelas, u_ref = campo_orig(fb, area, cfg)
+        for r in janelas:
+            c = r.poligono.centroid
+            registro.append({"erro_graus": abs(_dif180(r.direcao.azimute_graus, _azimute_verdade(cen["curva"], c.x, c.y))),
+                             "herdada": bool(r.direcao.herdada), "area_m2": float(r.poligono.area)})
+        return campo, janelas, u_ref
+    cli.estimar_campo_direcao = envolto_campo
+    return original, campo_orig
 
 
 def rodar(cen: dict, cfg, pasta: Path, rotulo: str, oraculo: bool = False) -> dict:
@@ -269,19 +279,19 @@ def rodar(cen: dict, cfg, pasta: Path, rotulo: str, oraculo: bool = False) -> di
     saida = pasta / f"saida_{cen['nome']}_{rotulo}.gpkg"
     t0 = time.time()
     registro: list = []
-    original = _instalar_orientacao(cen, oraculo, registro)
+    original, campo_orig = _instalar_orientacao(cen, oraculo, registro)
     try:
         resumos = executar_deteccao(cen["tif"], cen["talhao"], saida, cfg)
     except Exception as exc:  # falha do algoritmo é resultado, não erro do diagnóstico
-        cli.estimar_direcoes = original
+        cli.estimar_direcoes, cli.estimar_campo_direcao = original, campo_orig
         return {"erro": f"{type(exc).__name__}: {exc}", "tempo_s": time.time() - t0, "cenario": cen["nome"],
                 "rotulo": rotulo}
-    cli.estimar_direcoes = original
+    cli.estimar_direcoes, cli.estimar_campo_direcao = original, campo_orig
     t = time.time() - t0
     m = metricas(cen, saida, cfg.buffer_interno_m)
     m.pop("_erro_pontos", None)
     r = resumos[0]
-    eo = [e["erro_graus"] for e in registro]
+    eo = [e["erro_graus"] for e in registro] or [float("nan")]
     m.update({"orient_erro_med_graus": float(np.median(eo)), "orient_erro_max_graus": float(np.max(eo)),
               "orient_oraculo": oraculo})
     m.update({"tempo_s": t, "cenario": cen["nome"], "rotulo": rotulo, "n_regioes": r.n_regioes,
@@ -303,7 +313,7 @@ def principal(modo: str, pasta: Path) -> None:
             return
         with contextlib.redirect_stdout(io.StringIO()):
             r = rodar(cen, cfg, pasta, rot, oraculo)
-        r["params"] = {"regiao_m": cfg.regiao_m, "bloco_m": cfg.comprimento_bloco_m, "passo_m": cfg.passo_bloco_m,
+        r["params"] = {"modo_blocos": cfg.modo_blocos, "regiao_m": cfg.regiao_m, "bloco_m": cfg.comprimento_bloco_m, "passo_m": cfg.passo_bloco_m,
                        "desvio_max": cfg.desvio_angular_max_graus}
         resultados.append(r)
         res_json.write_text(json.dumps(resultados, indent=1, default=str))
@@ -329,6 +339,13 @@ def principal(modo: str, pasta: Path) -> None:
                 cfg = replace(cfg0, regiao_m=reg, area_minima_regiao_m2=min(2000.0, 0.3 * reg * reg),
                               desvio_angular_max_graus=90.0, comprimento_bloco_m=cb, passo_bloco_m=pb)
                 executar(cen, cfg, f"orac_reg{int(reg)}_bloco{cb:g}", oraculo=True)
+    elif modo.startswith("ajuste"):  # ajuste | ajuste:<rotulo>=<chave>=<valor>,<chave>=<valor>;...
+        # cenários: reta, R400, R200, R100, R50, R30, S; configs vêm de VARIANTES (abaixo) ou da linha de comando
+        cens = [montar_cenario(pasta, "reta_real", None)] + [montar_cenario(pasta, f"R{r}_real", r) for r in (400, 200, 100, 50, 30)]
+        cens.append(montar_cenario(pasta, "S100_real", 100, s_forma=True, realista=True))
+        for rot, cfg in variantes_ajuste(modo, cfg0).items():
+            for cen in cens:
+                executar(cen, cfg, rot)
     elif modo == "varredura":
         cens = [montar_cenario(pasta, "reta_real", None)] + [montar_cenario(pasta, f"R{r}_real", r) for r in (100, 50, 30)]
         for cen in cens:
@@ -346,6 +363,23 @@ def principal(modo: str, pasta: Path) -> None:
                     cfg = replace(cfg0, regiao_m=reg, area_minima_regiao_m2=min(2000.0, 0.3 * reg * reg),
                                   desvio_angular_max_graus=90.0, comprimento_bloco_m=cb, passo_bloco_m=pb)
                     executar(cen, cfg, f"reg{int(reg)}_bloco{cb:g}_{pb:g}")
+
+
+def variantes_ajuste(modo: str, cfg0) -> dict:
+    """`ajuste` usa variantes fixas; `ajuste:rot=chave=valor,chave=valor` cria uma variante ad hoc."""
+    var = {"antes": replace(cfg0, modo_blocos="regiao"), "depois": cfg0}
+    if ":" in modo:
+        out = {}
+        for item in modo.split(":", 1)[1].split(";"):
+            rot, _, kv = item.partition("=")
+            ch = {}
+            for par in kv.split(","):
+                if par:
+                    k, v = par.split("=")
+                    ch[k] = v if k == "modo_blocos" else float(v)
+            out[rot] = replace(cfg0, **ch)
+        return out
+    return var
 
 
 if __name__ == "__main__":
