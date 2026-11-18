@@ -25,7 +25,7 @@ class Config:
 
     # Regras geométricas: valores de referência são premissas do projeto; tolerâncias são hipóteses
     espacamento_gemeas_ref_m: float = 1.50  # premissa do projeto
-    tolerancia_espacamento_gemeas_m: float = 0.15  # HIPÓTESE, sem fonte lida
+    tolerancia_espacamento_gemeas_m: float = 0.075  # HIPÓTESE, sem fonte lida
     largura_faixa_min_m: float = 0.45  # premissa do projeto
     largura_faixa_max_m: float = 0.50  # premissa do projeto
     tolerancia_largura_m: float = 0.10  # HIPÓTESE, sem fonte lida

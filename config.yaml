@@ -13,7 +13,7 @@ semijanela_busca_m: 0.50       # HIPÓTESE de partida do projeto
 
 # Regras geométricas
 espacamento_gemeas_ref_m: 1.50          # premissa do projeto
-tolerancia_espacamento_gemeas_m: 0.15   # HIPÓTESE, sem fonte lida
+tolerancia_espacamento_gemeas_m: 0.075  # HIPÓTESE, sem fonte lida
 largura_faixa_min_m: 0.45               # premissa do projeto
 largura_faixa_max_m: 0.50               # premissa do projeto
 tolerancia_largura_m: 0.10              # HIPÓTESE, sem fonte lida

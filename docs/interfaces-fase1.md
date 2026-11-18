@@ -92,7 +92,7 @@ class Config:
 
     # Regras geométricas (premissas do projeto como referência; tolerâncias são hipóteses)
     espacamento_gemeas_ref_m: float = 1.50
-    tolerancia_espacamento_gemeas_m: float = 0.15
+    tolerancia_espacamento_gemeas_m: float = 0.075
     largura_faixa_min_m: float = 0.45
     largura_faixa_max_m: float = 0.50
     tolerancia_largura_m: float = 0.10
@@ -212,7 +212,7 @@ Nenhum destes tem fonte lida. São parâmetros configuráveis, a definir no pilo
 |---|---|---|
 | espacamento_estacoes_m | 10,0 | Hipótese de partida do projeto (5 a 10 m) |
 | semijanela_busca_m | 0,50 | Hipótese de partida do projeto |
-| tolerancia_espacamento_gemeas_m | 0,15 | Hipótese |
+| tolerancia_espacamento_gemeas_m | 0,075 | Hipótese |
 | tolerancia_largura_m | 0,10 | Hipótese |
 | janela_mediana | 3 estações | Hipótese |
 | limite_variacao_m | 0,30 | Hipótese; depende do espaçamento entre estações |
