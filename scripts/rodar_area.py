@@ -3,8 +3,12 @@
 Só chama a linha de comando já existente (python -m deteccao_linhas); não tem lógica de detecção.
 Convenção de pastas (ver docs/guia-execucao.md):
   entrada/ortomosaico  um GeoTIFF RGB
-  entrada/talhoes      um .shp ou .gpkg com os polígonos (campo identificador "id")
-  entrada/referencia   (opcional) um .shp ou .gpkg com linhas de referência, para comparar
+  entrada/talhoes      (ou entrada/poligonos_talhoes) um .shp ou .gpkg com os polígonos; o campo
+                       identificador é "id", ou o que o config.yaml da área indicar em campo_id_talhao
+  entrada/referencia   (ou entrada/linhas_fileiras_cana_projetadas) (opcional) um .shp ou .gpkg com
+                       linhas de referência, para comparar
+  entrada/linhas_mae, entrada/linhas_piloto_automatico_plantio  guardadas para o teste de linhas
+                       gêmeas (ainda não lidas)
   config.yaml          (opcional) configuração da detecção da área; senão usa config_deteccao.yaml
   config_comparacao.yaml (opcional) configuração da comparação
   entrada/mds, entrada/mdt  reservadas para o teste opcional do modelo de terreno (ainda não lidas)
@@ -21,7 +25,9 @@ RAIZ = Path(__file__).resolve().parent.parent
 CONFIG_PADRAO = RAIZ / "config_deteccao.yaml"
 
 
-def _unico(pasta: Path, padroes: list[str], rotulo: str, obrigatorio: bool) -> Path | None:
+def _unico(entrada: Path, pastas: list[str], padroes: list[str], rotulo: str, obrigatorio: bool) -> Path | None:
+    """Procura o arquivo na primeira pasta que existir, na ordem de `pastas` (nomes alternativos)."""
+    pasta = next((entrada / n for n in pastas if (entrada / n).is_dir()), entrada / pastas[0])
     achados = sorted(p for padrao in padroes for p in pasta.glob(padrao) if p.is_file())
     if not achados:
         if obrigatorio:
@@ -53,9 +59,9 @@ def main(argv: list[str]) -> int:
     if not area.is_dir():
         sys.exit(f"ERRO: a pasta {area} não existe. Crie a área com scripts\\nova_area.bat.")
     entrada = area / "entrada"
-    orto = _unico(entrada / "ortomosaico", ["*.tif", "*.tiff"], "ortomosaico", True)
-    talhoes = _unico(entrada / "talhoes", ["*.shp", "*.gpkg"], "talhões", True)
-    ref = _unico(entrada / "referencia", ["*.shp", "*.gpkg"], "referência", False)
+    orto = _unico(entrada, ["ortomosaico"], ["*.tif", "*.tiff"], "ortomosaico", True)
+    talhoes = _unico(entrada, ["talhoes", "poligonos_talhoes"], ["*.shp", "*.gpkg"], "talhões", True)
+    ref = _unico(entrada, ["referencia", "linhas_fileiras_cana_projetadas"], ["*.shp", "*.gpkg"], "referência", False)
     config = area / "config.yaml"
     if not config.exists():
         config = CONFIG_PADRAO

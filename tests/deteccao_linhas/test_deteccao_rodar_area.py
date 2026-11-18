@@ -63,3 +63,14 @@ def test_rodar_area_mensagem_clara_sem_ortomosaico(tmp_path):
     r = _rodar(area)
     assert r.returncode != 0
     assert "nenhum arquivo de ortomosaico" in (r.stdout + r.stderr)
+
+
+def test_rodar_area_aceita_nomes_alternativos_das_pastas(tmp_path):
+    """Pastas poligonos_talhoes e linhas_fileiras_cana_projetadas valem no lugar de talhoes e referencia."""
+    area = _area(tmp_path)
+    (area / "entrada/talhoes").rename(area / "entrada/poligonos_talhoes")
+    (area / "entrada/referencia").rename(area / "entrada/linhas_fileiras_cana_projetadas")
+    r = _rodar(area)
+    assert r.returncode == 0, r.stdout + r.stderr
+    exec_ = [p for p in (area / "saida").iterdir() if p.is_dir()][0]
+    assert (exec_ / "relatorio_comparacao.json").exists()

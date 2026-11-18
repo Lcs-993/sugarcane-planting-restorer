@@ -17,7 +17,10 @@ dados\areas\area_01\
   entrada\
     ortomosaico\   um GeoTIFF RGB (.tif)
     talhoes\       um .shp (com .shx, .dbf e .prj) ou .gpkg com os polígonos
+                   (também vale o nome poligonos_talhoes\). O campo identificador é "id";
+                   se for outro (ex.: CODE), crie config.yaml na área com campo_id_talhao: CODE
     referencia\    (opcional) um .shp ou .gpkg com linhas de referência, para comparar
+                   (também vale o nome linhas_fileiras_cana_projetadas\)
     mds\           reservada para o teste opcional do modelo de terreno (ainda não é lida)
     mdt\           reservada para o mesmo teste (ainda não é lida)
   saida\           os resultados; cada execução cria uma subpasta com data e hora
