@@ -1,5 +1,56 @@
 # Diagnóstico de fileiras em curva (ferramenta 2, `deteccao_linhas`)
 
+> **Atualização (branch `ajustes-curvas`)**: o diagnóstico abaixo (seções "Cenário" em diante) descreve o comportamento
+> ANTES dos ajustes (`modo_blocos: regiao`). Esta seção traz o DEPOIS. Mesmo gerador sintético, mesmas sementes.
+> **Ressalva: não foi possível rodar nos dados reais do talhão (a pasta do usuário não estava conectada).** A regressão
+> no talhão 1031 (362 fileiras, mediana 7 cm contra as linhas recebidas, p95 16 cm, viés −6,8 cm, cobertura da
+> referência 94,4 %, 1.241 pontos duvidosos) precisa ser repetida antes de adotar os novos padrões. Nada aqui é acurácia de campo.
+
+## Antes x depois (versão "real": falhas, daninha e ruído; erro >25 cm só entre os pontos 'detectado')
+| Cenário | cobertura ≤30 cm | erro >25 cm | fileiras detectadas / verdade | detectado / interpolado / duvidoso (depois) | tempo (s) |
+|---|---|---|---|---|---|
+| reta | 0,94 → 0,99 | 0,000 → 0,000 | 20 → 20 / 20 | 0,95 / 0,04 / 0,00 | 1,1 → 2,6 |
+| R=400 | 0,50 → 0,99 | 0,102 → 0,000 | 46 → 20 / 20 | 0,92 / 0,07 / 0,00 | |
+| R=200 | 0,34 → 0,99 | 0,139 → 0,000 | 39 → 21 / 20 | 0,95 / 0,04 / 0,01 | |
+| R=100 | 0,08 → 0,98 | 0,167 → 0,000 | 12 → 20 / 20 | 0,96 / 0,04 / 0,00 | |
+| R=50 | 0,02 → 0,97 | 0,500 → 0,002 | 4 → 22 / 20 (1 trilha troca de fileira) | 0,95 / 0,04 / 0,01 | |
+| R=30 | erro → 0,60 | erro → 0,031 | erro → 15 / 13 | 0,62 / 0,23 / 0,15 | |
+| S (R=100) | 0,25 → 0,99 | 0,216 → 0,000 | 49 → 20 / 20 | 0,97 / 0,03 / 0,00 | 2,6 → 5,5 |
+
+Erro de orientação mediano: 7° / 16° / 35° / 74° (R=400/200/100/50) antes; ≤ 0,2° depois. Tempo da reta medido
+isolado: 1,1 s → 2,6 s (≈ 2,4×); os tempos das curvas foram medidos com outro processo rodando. Para o talhão real
+(27,3 ha) a estimativa é de mais ~1 min só na orientação (≈ 64 ms por janela de 15 m × ~1.300 janelas), **estimativa, não medição**.
+Versão "limpa": mesma tendência (R=50 0,97; R=30 0,73, erro >25 cm 0,034). Figura: `curvas_antes_depois.png`.
+
+## Raio crítico (critério: cobertura ≥ 0,80 e erro >25 cm ≤ 2 % dos 'detectado')
+- Antes: acima de 400 m.
+- Depois: passa em R = 400, 200, 100, 50 m (raio local das fileiras de 35 a 65 m no R=50) e na curva em S.
+  R = 30 m (fileiras internas com raio local de 15 m, giro de ~200° no talhão) **não passa**: cobertura 0,60 e erro >25 cm 3,1 %.
+  Raio crítico novo: entre 30 e 50 m (nos cenários sintéticos).
+
+## O que mudou (detalhes em `docs/interfaces-deteccao.md`, seção 9, item 11)
+1. Direção por janela de 15 m, com ajuste plano local e substituição de janela atípica (marcada como herdada), em vez de uma direção por região de 150 m.
+2. Blocos de 10 m ao longo de linhas de corrente do campo de direção, com passo de 5 m, faixas de 15 m, folga lateral lida e núcleo aceito.
+3. Qualidade: desvio à corda no lugar da reta de melhor ajuste; trecho com curvatura > 0,04 1/m vira 'duvidoso'.
+Escolha pelo risco: a alternativa só de configuração (região 10–15 m, bloco 5 m) ganhou menos (R=50 0,69–0,82) e piora com daninha e falhas
+longas em janela pequena; no modo `faixas` a direção é ajustada por vizinhança (atípicos substituídos), e o modo antigo continua disponível (`modo_blocos: regiao`).
+
+## Parâmetros novos (todos hipótese, sem fonte lida)
+`modo_blocos` (faixas), `passo_bloco_faixas_m` 5, `janela_direcao_m` 15, `passo_angulo_grosso_campo_graus` 3, `passo_angulo_fino_campo_graus` 0,5,
+`max_pontos_janela_direcao` 30000, `raio_suavizacao_direcao_m` 25, `desvio_campo_max_graus` 8, `largura_corredor_m` 15,
+`margem_lateral_bloco_m` 1,5, `curvatura_duvidosa_1_m` 0,04.
+
+## Riscos
+- Dados reais não rodados (ver ressalva). Em reta o padrão agora é o modo `faixas`: pode mudar o resultado do talhão 1031; comparar com `modo_blocos: regiao`.
+- Janelas de 15 m são mais sensíveis a daninha, sombra e falhas longas que regiões de 150 m (mitigado pelo ajuste local, não eliminado).
+- Em reta, `marcar_saltos_curvos` usa critério diferente do anterior: o número de pontos 'duvidoso' pode diferir.
+- Tolerância a falhas mantida em metros (6 blocos de 5 m = 30 m); em R=50 uma trilha trocou de fileira (22 trilhas para 20 fileiras).
+- Imagem sintética, uma semente por cenário, sem sombra, declive, terraço nem raio variável dentro da passada.
+
+---
+
+# Diagnóstico original (antes dos ajustes)
+
 Teste em **imagem sintética** com verdade exata. Mostra como o algoritmo se comporta; **não é acurácia de campo**
 (que só sai da validação com RTK, `docs/plano-validacao.md`). O pacote não foi alterado: tudo foi feito por
 configuração, e o "oráculo" é um desvio dentro do script de diagnóstico (`tests/deteccao_linhas/diagnostico_curvas.py`,
@@ -54,7 +105,7 @@ fragmentação (1,9 a 3,2 pedaços por fileira verdadeira em curva) e erro >25 c
 - Só configuração (regiao 10 a 15 m, bloco 5): cerca de 100 m com folga; R=50 passa só no limite (0,82 com regiao 10, bloco 5/2,5); R=30 não passa.
 - Sintético: na imagem real, daninha, sombra e falhas longas podem piorar a direção em janelas de 10 a 15 m. Testar no talhão real antes de adotar.
 
-## Mudanças sugeridas (não implementadas)
+## Mudanças sugeridas (1, 2 (parcial), 3 (não necessária) e 5 foram implementadas; ver a atualização no início)
 1. Direção por bloco, guiada pelo rastreamento (tangente extrapolada das últimas posições ligadas, refinada ±5°).
 2. Perfil lateral em coordenadas curvilíneas (faixa curva em torno da trilha prevista), no lugar de retângulos retos.
 3. Projeção quadrática no rastreamento e tolerância de ligação ligada à curvatura prevista.
