@@ -16,9 +16,9 @@ from .config import Config, ConfigComparacao, carregar_config, carregar_config_c
 from .entrada import carregar_entrada
 from .indice_binarizacao import (abrir_fonte_binaria, abrir_fonte_indice, calcular_limiar_otsu,
                                  recortar_talhao)
-from .orientacao import dividir_em_regioes, estimar_direcoes
+from .orientacao import dividir_em_regioes, estimar_campo_direcao, estimar_direcoes
 from .pente import ajustar_bloco
-from .perfil_lateral import calcular_perfil, gerar_blocos
+from .perfil_lateral import calcular_perfil, gerar_blocos, gerar_blocos_faixas
 from .qualidade import avaliar_trilhas
 from .rastreamento import rastrear_com_descartes
 from .saida import gravar_geopackage, numerar_fileiras
@@ -41,9 +41,13 @@ def executar_deteccao(caminho_ortomosaico: Path, caminho_talhoes: Path, caminho_
             limiar = calcular_limiar_otsu(fonte, area, cfg)
             fb = abrir_fonte_binaria(fonte, area, limiar, cfg)
             print(f"[{talhao.id}] limiar={limiar:.4f}; orientação por região...", flush=True)
-            regioes, u_ref = estimar_direcoes(fb, dividir_em_regioes(area, cfg), cfg)
             c = area.poligono_util.centroid
-            blocos = gerar_blocos(regioes, u_ref, (c.x, c.y), cfg)
+            if cfg.modo_blocos == "faixas":
+                campo, regioes, u_ref = estimar_campo_direcao(fb, area, cfg)
+                blocos = gerar_blocos_faixas(campo, area.poligono_util, u_ref, (c.x, c.y), cfg)
+            else:
+                regioes, u_ref = estimar_direcoes(fb, dividir_em_regioes(area, cfg), cfg)
+                blocos = gerar_blocos(regioes, u_ref, (c.x, c.y), cfg)
             herdadas = sum(r.direcao.herdada for r in regioes)
             print(f"[{talhao.id}] {len(regioes)} regiões ({herdadas} com direção herdada), {len(blocos)} blocos",
                   flush=True)

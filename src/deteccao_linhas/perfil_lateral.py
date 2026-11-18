@@ -77,6 +77,122 @@ def gerar_blocos(regioes: list[Regiao], u_ref: tuple[float, float], c_ref: tuple
     return blocos
 
 
+def _retangulo(cx: float, cy: float, u: tuple[float, float], comp: float, larg: float) -> Polygon:
+    ux, uy = u
+    nx, ny = -uy, ux
+    a, b = comp / 2.0, larg / 2.0
+    return Polygon([(cx + s * ux + t * nx, cy + s * uy + t * ny) for s, t in ((-a, -b), (a, -b), (a, b), (-a, b))])
+
+
+def _linha_de_corrente(campo, semente: tuple[float, float], passo: float, limite: Polygon, max_passos: int
+                       ) -> list[tuple[float, float]]:
+    """Centros dos blocos ao longo da linha de corrente do campo por `semente`, nos dois sentidos, enquanto
+    ficarem dentro de `limite` (RK2, passo = distância entre centros)."""
+    def marchar(sentido: float) -> list[tuple[float, float]]:
+        x, y = semente
+        saida: list[tuple[float, float]] = []
+        for _ in range(max_passos):
+            vx, vy = campo.vetor_em(x, y)
+            mx, my = x + sentido * passo / 2 * vx, y + sentido * passo / 2 * vy
+            vx, vy = campo.vetor_em(mx, my)
+            x, y = x + sentido * passo * vx, y + sentido * passo * vy
+            if not limite.contains(shapely.Point(x, y)):
+                break
+            saida.append((x, y))
+        return saida
+    return marchar(-1.0)[::-1] + [semente] + marchar(1.0)
+
+
+def gerar_blocos_faixas(campo, area_util, u_ref: tuple[float, float], c_ref: tuple[float, float],
+                        cfg: Config) -> list[Bloco]:
+    """Blocos ao longo de linhas de corrente do campo de direção (modo_blocos="faixas").
+
+    Cada faixa tem largura cfg.largura_corredor_m; os blocos de uma faixa são retângulos de
+    cfg.comprimento_bloco_m orientados pela direção local do campo, espaçados de passo_blocos.
+    A região ainda não coberta (`restante`) escolhe a próxima semente (vértice mais recuado em u_ref);
+    o núcleo do bloco é o retângulo da faixa recortado por `restante` no início da faixa, de modo que
+    faixas vizinhas não contam a mesma fileira duas vezes. O perfil é lido numa área maior (folga lateral
+    cfg.margem_lateral_bloco_m) e só posições no núcleo são aceitas (ver pente.ajustar_bloco).
+    HIPÓTESE (sem fonte lida): tudo isto é decisão de implementação.
+    """
+    L, W, M = cfg.comprimento_bloco_m, cfg.largura_corredor_m, cfg.margem_lateral_bloco_m
+    passo_blocos = min(cfg.passo_bloco_faixas_m, L)
+    area_min = max(30.0, cfg.lateral_minima_bloco_m * COMPRIMENTO_MIN_BLOCO_M)
+    restante = area_util
+    blocos: list[Bloco] = []
+    nf = 0
+    for _ in range(5000):
+        partes = [g for g in getattr(restante, "geoms", [restante]) if g.geom_type == "Polygon" and g.area >= area_min]
+        if not partes:
+            break
+        # vértice mais recuado em u_ref entre todas as partes restantes
+        melhor = None
+        for g in partes:
+            pts = _coords(g.exterior)
+            sv = (pts[:, 0] - c_ref[0]) * u_ref[0] + (pts[:, 1] - c_ref[1]) * u_ref[1]
+            i = int(np.argmin(sv))
+            if melhor is None or sv[i] < melhor[0]:
+                melhor = (float(sv[i]), g, pts[i])
+        _, g, v = melhor
+        ce = g.centroid
+        dv = np.array([ce.x - v[0], ce.y - v[1]])
+        nv = float(np.hypot(*dv))
+        sem = (float(v[0]), float(v[1]))
+        if nv > 1e-6:
+            cand = (v[0] + dv[0] / nv * min(W / 2.0, nv), v[1] + dv[1] / nv * min(W / 2.0, nv))
+            if g.contains(shapely.Point(*cand)):
+                sem = (float(cand[0]), float(cand[1]))
+        limite = area_util.buffer(L)
+        max_passos = int(2.0 * (area_util.bounds[2] - area_util.bounds[0] + area_util.bounds[3] - area_util.bounds[1])
+                         / passo_blocos) + 10
+        centros = _linha_de_corrente(campo, sem, passo_blocos, limite, max_passos)
+        nf += 1
+        n = 0
+        faixa = []
+        for (cx, cy) in centros:
+            u = campo.vetor_em(cx, cy)
+            nx, ny = -u[1], u[0]
+            ret_ext = _retangulo(cx, cy, u, L, W + 2 * M)
+            ret_nuc = _retangulo(cx, cy, u, L, W)
+            faixa.append(ret_nuc)
+            poli = ret_ext.intersection(area_util)
+            nucleo = ret_nuc.intersection(restante)
+            if poli.is_empty or nucleo.is_empty or nucleo.area < 1.0:
+                continue
+            poli = _so_poligonos(poli)
+            if poli is None:
+                continue
+            p = _coords(poli)
+            sp = (p[:, 0] - cx) * u[0] + (p[:, 1] - cy) * u[1]
+            tp = (p[:, 0] - cx) * nx + (p[:, 1] - cy) * ny
+            bs0, bs1, bt0, bt1 = sp.min(), sp.max(), tp.min(), tp.max()
+            if bs1 - bs0 < COMPRIMENTO_MIN_BLOCO_M or bt1 - bt0 < cfg.lateral_minima_bloco_m:
+                continue
+            n += 1
+            tc = (bt0 + bt1) / 2.0
+            centro = (cx + (bs0 + bs1) / 2.0 * u[0] + tc * nx, cy + (bs0 + bs1) / 2.0 * u[1] + tc * ny)
+            s_glob = (centro[0] - c_ref[0]) * u_ref[0] + (centro[1] - c_ref[1]) * u_ref[1]
+            blocos.append(Bloco(
+                id_bloco=f"F{nf:03d}-B{n:03d}", id_regiao=f"F{nf:03d}", origem=(cx, cy), u=(float(u[0]), float(u[1])),
+                n=(nx, ny), s0_m=float(bs0), comprimento_m=float(bs1 - bs0), t_min_m=float(bt0), t_max_m=float(bt1),
+                s_global_m=float(s_glob), poligono=poli, nucleo=_so_poligonos(nucleo), curvatura_1_m=0.0))
+        cobertura = shapely.union_all(faixa) if faixa else None
+        if cobertura is None or cobertura.is_empty:  # garante progresso
+            cobertura = shapely.Point(*sem).buffer(W / 2.0)
+        restante = restante.difference(cobertura)
+        if restante.is_empty:
+            break
+    blocos.sort(key=lambda b: (b.s_global_m, b.id_bloco))
+    return blocos
+
+
+def _so_poligonos(geom):
+    if geom.geom_type in ("Polygon", "MultiPolygon"):
+        return geom if geom.area > 0 else None
+    partes = [g for g in getattr(geom, "geoms", []) if g.geom_type in ("Polygon", "MultiPolygon")]
+    return shapely.union_all(partes) if partes else None
+
+
 def calcular_perfil(fonte: FonteBinaria, bloco: Bloco, cfg: Config) -> PerfilLateral:
     """Integra a vegetação ao longo de bloco.u em bins laterais de cfg.bin_lateral_m (H1).
 

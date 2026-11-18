@@ -97,6 +97,11 @@ class Bloco:
     # DESVIO das interfaces aprovadas: polígono do bloco (retângulo recortado pela região) em
     # coordenadas do mapa, para que blocos de regiões vizinhas não contem o mesmo pixel duas vezes.
     poligono: Polygon | MultiPolygon | None = None
+    # Ajustes de curva (modo_blocos="faixas"): `poligono` inclui uma folga lateral lida no perfil;
+    # só posições dentro de `nucleo` (sem a folga e sem sobreposição com outras faixas) são aceitas.
+    nucleo: Polygon | MultiPolygon | None = None
+    # direção do bloco em graus a partir do norte, e curvatura local do campo (1/m, com sinal: >0 vira à esquerda)
+    curvatura_1_m: float = 0.0
 
 
 @dataclass(frozen=True)

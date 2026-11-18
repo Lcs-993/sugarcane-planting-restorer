@@ -2,7 +2,8 @@
 
 Decisões de implementação (hipóteses, sem fonte lida):
 - processa blocos em ordem de s_global_m; para cada bloco, as trilhas "elegíveis" são as que ficam atrás
-  dele (0 < ds <= (max_blocos_falha + 1) * passo_bloco_m + comprimento_bloco_m / 2) e cujo rastro projetado,
+  dele (0 < ds <= (max_blocos_falha + 1) * passo_bloco_m + comprimento_bloco_m / 2; no modo "faixas" o passo é
+  cfg.passo_efetivo_m e o limite de falhas mantém os mesmos metros (cfg.max_falhas_efetivas)) e cujo rastro projetado,
   no intervalo s do bloco, toca o polígono do bloco (com folga de tolerancia_ligacao_m);
 - projeção do último ponto da trilha ao bloco: ao longo da direção média entre a do último bloco e a do atual;
 - associação um-para-um por atribuição de custo mínimo (distância lateral no quadro do bloco atual), aceita
@@ -82,11 +83,12 @@ def rastrear_com_descartes(resultados: list[ResultadoPente], cfg: Config) -> tup
     tol = cfg.tolerancia_ligacao_m
     for res in ordenados:
         b = res.bloco
-        poli = b.poligono.buffer(tol) if b.poligono is not None else None
+        ref_poli = b.nucleo if b.nucleo is not None else b.poligono  # faixas: só o núcleo conta
+        poli = ref_poli.buffer(tol) if ref_poli is not None else None
         eleg: list[tuple[_Ativa, tuple[float, float]]] = []
         for a in ativas:
             ds, proj = _projetar(a, b)
-            if ds <= 0 or ds > (cfg.max_blocos_falha + 1) * cfg.passo_bloco_m + ds_max_extra:
+            if ds <= 0 or ds > (cfg.max_falhas_efetivas + 1) * cfg.passo_efetivo_m + ds_max_extra:
                 continue
             if poli is not None:
                 # o rastro da fileira projetada ao longo do intervalo s do bloco deve tocar o polígono
@@ -128,7 +130,7 @@ def rastrear_com_descartes(resultados: list[ResultadoPente], cfg: Config) -> tup
                 a.u_ultimo = b.u
             else:
                 a.falhas.append(b)
-                if len(a.falhas) > cfg.max_blocos_falha:
+                if len(a.falhas) > cfg.max_falhas_efetivas:
                     a.falhas = []  # nada projetado é mantido
                     encerradas.append(a)
                     ativas.remove(a)

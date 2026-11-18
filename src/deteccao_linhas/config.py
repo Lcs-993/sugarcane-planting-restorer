@@ -65,6 +65,23 @@ class Config:
 
     campo_id_talhao: str = "id"
 
+    # Fileiras em curva (ajustes de curva; docs/diagnostico-curvas.md). Tudo HIPÓTESE, sem fonte lida.
+    # modo_blocos="regiao" reproduz o comportamento anterior (uma direção por região de regiao_m, blocos
+    # retos, passo_bloco_m); para reproduzi-lo basta modo_blocos: regiao.
+    # modo_blocos="faixas" estima um campo de direção em janelas pequenas e gera blocos ao longo de
+    # linhas de corrente desse campo (faixas), cada bloco orientado pela direção local.
+    modo_blocos: Literal["regiao", "faixas"] = "faixas"
+    passo_bloco_faixas_m: float = 5.0  # HIPÓTESE; passo dos blocos no modo "faixas" (metade do comprimento: sobreposição)
+    janela_direcao_m: float = 15.0  # HIPÓTESE; lado das janelas do campo de direção
+    passo_angulo_grosso_campo_graus: float = 3.0  # HIPÓTESE; busca da direção nas janelas
+    passo_angulo_fino_campo_graus: float = 0.5  # HIPÓTESE
+    max_pontos_janela_direcao: int = 30000  # HIPÓTESE; subamostra por janela
+    raio_suavizacao_direcao_m: float = 25.0  # HIPÓTESE; vizinhança do ajuste local do campo
+    desvio_campo_max_graus: float = 8.0  # HIPÓTESE; janela que destoa do ajuste local é substituída por ele
+    largura_corredor_m: float = 15.0  # HIPÓTESE; largura útil de cada faixa (blocos de uma linha de corrente)
+    margem_lateral_bloco_m: float = 1.5  # HIPÓTESE; folga lateral lida mas não aceita (evita perder fileira na borda)
+    curvatura_duvidosa_1_m: float = 0.04  # HIPÓTESE; 1/raio (raio de 25 m) acima do qual o trecho vira 'duvidoso' (0 = desligado)
+
     # DESVIOS das interfaces aprovadas: parâmetros acrescentados na implementação (todos HIPÓTESE)
     confianca_min_direcao: float = 0.15  # abaixo disto a região herda a direção das vizinhas
     sigma_suavizacao_perfil_m: float = 0.10  # suavização gaussiana do perfil lateral
@@ -73,6 +90,18 @@ class Config:
     lateral_minima_bloco_m: float = 3.0  # bloco com extensão lateral menor é descartado
     distancia_min_picos_m: float = 0.40  # distância mínima entre picos do perfil
     distancia_fusao_picos_m: float = 0.90  # picos mais próximos que isto são fundidos (fica o mais proeminente)
+
+    @property
+    def passo_efetivo_m(self) -> float:
+        """Distância entre blocos consecutivos no modo escolhido."""
+        if self.modo_blocos == "faixas":
+            return min(self.passo_bloco_faixas_m, self.comprimento_bloco_m)
+        return self.passo_bloco_m
+
+    @property
+    def max_falhas_efetivas(self) -> int:
+        """max_blocos_falha vale em múltiplos de passo_bloco_m; com passo menor, mantém o mesmo comprimento em metros."""
+        return max(self.max_blocos_falha, int(round(self.max_blocos_falha * self.passo_bloco_m / self.passo_efetivo_m)))
 
     def __post_init__(self) -> None:
         def erro(msg: str) -> None:
@@ -108,6 +137,15 @@ class Config:
             erro("sg_janela deve ser um inteiro ímpar >= 3.")
         if self.sg_ordem < 1 or self.sg_ordem >= self.sg_janela:
             erro("sg_ordem deve ser >= 1 e menor que sg_janela.")
+        if self.modo_blocos not in ("regiao", "faixas"):
+            erro(f"modo_blocos inválido: {self.modo_blocos!r}. Use 'regiao' ou 'faixas'.")
+        for nome in ("janela_direcao_m", "passo_angulo_grosso_campo_graus", "passo_angulo_fino_campo_graus",
+                     "max_pontos_janela_direcao", "raio_suavizacao_direcao_m", "desvio_campo_max_graus",
+                     "largura_corredor_m", "passo_bloco_faixas_m"):
+            if not float(getattr(self, nome)) > 0:
+                erro(f"{nome} deve ser > 0.")
+        if self.margem_lateral_bloco_m < 0 or self.curvatura_duvidosa_1_m < 0:
+            erro("margem_lateral_bloco_m e curvatura_duvidosa_1_m devem ser >= 0.")
         if self.janela_mediana < 1 or self.janela_mediana % 2 == 0:
             erro("janela_mediana deve ser um inteiro ímpar >= 1.")
         if self.passo_bloco_m > self.comprimento_bloco_m:
