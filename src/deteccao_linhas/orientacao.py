@@ -11,11 +11,12 @@ Confiança = (melhor - mediana dos candidatos grossos) / melhor, em [0, 1].
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import numpy as np
 from rasterio.features import geometry_mask
 from scipy.signal import savgol_filter
+from scipy.spatial import cKDTree
 from shapely.geometry import box
 
 from .config import Config
@@ -81,7 +82,9 @@ def _criterio(x: np.ndarray, y: np.ndarray, veg: np.ndarray, angulo: float, bin_
     return float(np.average((suave - media) ** 2, weights=w))
 
 
-def estimar_direcao_regiao(fonte: FonteBinaria, regiao: Regiao, cfg: Config) -> DirecaoFileiras:
+def estimar_direcao_regiao(fonte: FonteBinaria, regiao: Regiao, cfg: Config, *,
+                           passo_grosso: float | None = None, passo_fino: float | None = None,
+                           max_pontos: int | None = None) -> DirecaoFileiras:
     """Projeção por rotação na janela da região, em dois passos. Vetor com sentido provisório (norte positivo).
 
     Raises: ErroDeteccao se a região não tiver pixels válidos suficientes.
@@ -98,9 +101,12 @@ def estimar_direcao_regiao(fonte: FonteBinaria, regiao: Regiao, cfg: Config) -> 
         raise ErroDeteccao(f"região {regiao.id_regiao}: só {n_ok} pixels válidos")
     ys, xs = np.nonzero(ok)
     veg_all = jan.valores[ok].astype(np.float64)
-    if n_ok > cfg.max_pontos_orientacao:
+    passo_grosso = cfg.passo_angulo_grosso_graus if passo_grosso is None else passo_grosso
+    passo_fino = cfg.passo_angulo_fino_graus if passo_fino is None else passo_fino
+    max_pontos = cfg.max_pontos_orientacao if max_pontos is None else max_pontos
+    if n_ok > max_pontos:
         rng = np.random.default_rng(SEMENTE)
-        sel = rng.choice(n_ok, cfg.max_pontos_orientacao, replace=False)
+        sel = rng.choice(n_ok, max_pontos, replace=False)
         xs, ys, veg_all = xs[sel], ys[sel], veg_all[sel]
     ox, oy = jan.transform * (0.5, 0.5)
     px = abs(jan.transform.a)
@@ -111,12 +117,10 @@ def estimar_direcao_regiao(fonte: FonteBinaria, regiao: Regiao, cfg: Config) -> 
     if frac_veg < 0.02 or frac_veg > 0.98:
         raise ErroDeteccao(f"região {regiao.id_regiao}: vegetação {frac_veg:.1%}, sem contraste para orientar")
 
-    grossos = np.arange(0.0, 180.0, cfg.passo_angulo_grosso_graus)
+    grossos = np.arange(0.0, 180.0, passo_grosso)
     notas = np.array([_criterio(x, y, veg_all, a, cfg.bin_lateral_m, cfg) for a in grossos])
     melhor = float(grossos[int(np.argmax(notas))])
-    finos = melhor + np.arange(-cfg.passo_angulo_grosso_graus,
-                               cfg.passo_angulo_grosso_graus + cfg.passo_angulo_fino_graus / 2,
-                               cfg.passo_angulo_fino_graus)
+    finos = melhor + np.arange(-passo_grosso, passo_grosso + passo_fino / 2, passo_fino)
     notas_f = np.array([_criterio(x, y, veg_all, a, cfg.bin_lateral_m, cfg) for a in finos])
     k = int(np.argmax(notas_f))
     azimute = float(finos[k]) % 180.0
@@ -228,3 +232,119 @@ def estimar_direcoes(fonte: FonteBinaria, regioes: list[Regiao], cfg: Config
         saida.append(replace(r, direcao=DirecaoFileiras(azimute_graus=ang, vetor=vetor,
                                                         confianca=conf, herdada=herdada)))
     return saida, u_ref
+
+
+# ----------------------------------------------------------------------------- campo de direção (curvas)
+@dataclass(frozen=True)
+class CampoDirecao:
+    """Direção das fileiras em janelas pequenas (modo_blocos="faixas"), já suavizada e alinhada a u_ref.
+
+    `xy` são os centros das janelas; `angulos` os azimutes finais (graus, módulo 180). `vetor_em` interpola
+    por ponderação inversa da distância sobre as janelas mais próximas (média do ângulo dobrado).
+    """
+    xy: np.ndarray
+    angulos: np.ndarray
+    u_ref: tuple[float, float]
+    arvore: cKDTree
+
+    def vetor_em(self, x: float, y: float, k: int = 4) -> tuple[float, float]:
+        k = min(k, len(self.angulos))
+        d, i = self.arvore.query([x, y], k=k)
+        d, i = np.atleast_1d(d), np.atleast_1d(i)
+        w = 1.0 / (d + 1.0) ** 2
+        a2 = np.radians(2.0 * self.angulos[i])
+        ang = math.degrees(math.atan2(float(np.sum(w * np.sin(a2))), float(np.sum(w * np.cos(a2))))) / 2.0
+        return _alinhar(_vetor_provisorio(ang % 180.0), self.u_ref)
+
+    def azimute_em(self, x: float, y: float) -> float:
+        v = self.vetor_em(x, y)
+        return math.degrees(math.atan2(v[0], v[1])) % 180.0
+
+
+def _ajuste_local(i: int, xy: np.ndarray, ang: np.ndarray, peso: np.ndarray, validos: np.ndarray,
+                  cfg: Config) -> float | None:
+    """Ajuste plano (ângulo ~ a + b*dx + c*dy, ponderado, com uma rodada de rejeição de atípicos) nas
+    janelas válidas a até cfg.raio_suavizacao_direcao_m de `i`. Devolve o ângulo ajustado em `i` (módulo 180)."""
+    d = np.hypot(*(xy - xy[i]).T)
+    viz = np.nonzero(validos & (d <= cfg.raio_suavizacao_direcao_m))[0]
+    if len(viz) < 4:
+        return None
+    ref = ang[viz[0]]
+    a = np.array([ref + _dif180(ang[j], ref) for j in viz])
+    dx = xy[viz] - xy[i]
+    A = np.column_stack([np.ones(len(viz)), dx])
+    w = peso[viz].copy()
+    for _ in range(2):
+        if (w > 0).sum() < 4:
+            return None
+        coef, *_ = np.linalg.lstsq(A * np.sqrt(w)[:, None], a * np.sqrt(w), rcond=None)
+        res = np.abs(a - A @ coef)
+        w = np.where(res > cfg.desvio_campo_max_graus, 0.0, peso[viz])
+    return float(coef[0]) % 180.0
+
+
+def estimar_campo_direcao(fonte: FonteBinaria, area: AreaTalhao, cfg: Config
+                          ) -> tuple[CampoDirecao, list[Regiao], tuple[float, float]]:
+    """Campo de direção em janelas de cfg.janela_direcao_m sobre a área útil (modo_blocos="faixas").
+
+    1) cada janela estima sua direção (mesma projeção por rotação, busca mais grossa);
+    2) janela com direção não confiável, ou a mais de cfg.desvio_campo_max_graus do ajuste plano das
+       vizinhas, recebe o valor do ajuste (herdada=True, marcada), nunca silenciosa;
+    3) u_ref é a mediana circular das direções; sentidos alinhados a u_ref.
+    Devolve (campo, janelas como Regiao com direção, u_ref). Raises: ErroDeteccao se nada for estimável.
+    """
+    x0, y0, x1, y1 = area.bounds
+    lado = cfg.janela_direcao_m
+    janelas: list[Regiao] = []
+    x = x0
+    while x < x1:
+        y = y0
+        while y < y1:
+            rec = area.poligono_util.intersection(box(x, y, min(x + lado, x1), min(y + lado, y1)))
+            if (not rec.is_empty and rec.geom_type in ("Polygon", "MultiPolygon")
+                    and rec.area >= 0.3 * lado * lado):
+                janelas.append(Regiao(id_regiao=f"{area.talhao.id}-J{len(janelas) + 1:04d}",
+                                      talhao=area.talhao.id, poligono=rec, direcao=None))
+            y += lado
+        x += lado
+    if not janelas:
+        raise ErroDeteccao("nenhuma janela de direção na área útil")
+    n = len(janelas)
+    xy = np.array([j.poligono.centroid.coords[0] for j in janelas])
+    ang = np.zeros(n)
+    conf = np.zeros(n)
+    ok = np.zeros(n, dtype=bool)
+    for i, j in enumerate(janelas):
+        try:
+            d = estimar_direcao_regiao(fonte, j, cfg, passo_grosso=cfg.passo_angulo_grosso_campo_graus,
+                                       passo_fino=cfg.passo_angulo_fino_campo_graus,
+                                       max_pontos=cfg.max_pontos_janela_direcao)
+        except ErroDeteccao:
+            continue
+        if d.confianca >= cfg.confianca_min_direcao:
+            ang[i], conf[i], ok[i] = d.azimute_graus, d.confianca, True
+    if not ok.any():
+        raise ErroDeteccao("nenhuma janela com direção das fileiras estimável")
+    area_j = np.array([j.poligono.area for j in janelas])
+    peso = np.where(ok, conf * area_j, 0.0)
+    final = np.where(ok, ang, np.nan)
+    herdada = ~ok
+    for i in range(n):
+        aj = _ajuste_local(i, xy, ang, peso, ok, cfg)
+        if aj is None:
+            continue
+        if not ok[i] or abs(_dif180(ang[i], aj)) > cfg.desvio_campo_max_graus:
+            final[i], herdada[i] = aj, True
+    usar = ~np.isnan(final)
+    # janelas sem estimativa nem ajuste possível: herdam o azimute da janela válida mais próxima
+    if (~usar).any():
+        arv = cKDTree(xy[usar])
+        _, near = arv.query(xy[~usar])
+        final[~usar] = final[usar][near]
+    u_ref = _vetor_provisorio(_mediana_circular(list(final), list(np.maximum(peso, 1e-6))))
+    campo = CampoDirecao(xy=xy, angulos=final, u_ref=u_ref, arvore=cKDTree(xy))
+    saida = [replace(j, direcao=DirecaoFileiras(
+        azimute_graus=float(final[i]), vetor=_alinhar(_vetor_provisorio(float(final[i])), u_ref),
+        confianca=0.0 if herdada[i] else float(conf[i]), herdada=bool(herdada[i])))
+        for i, j in enumerate(janelas)]
+    return campo, saida, u_ref

@@ -17,6 +17,7 @@ import math
 from dataclasses import replace
 
 import numpy as np
+import shapely
 from scipy.ndimage import gaussian_filter1d
 from scipy.signal import find_peaks, peak_widths
 
@@ -151,5 +152,8 @@ def ajustar_bloco(perfil: PerfilLateral, cfg: Config) -> ResultadoPente:
 
     fases = ajustar_fase(perfil, cfg)
     pos = tuple(replace(q, confianca=calcular_confianca(q, cfg)) for q in localizar_dentes(perfil, fases, cfg))
+    if perfil.bloco.nucleo is not None:  # modo "faixas": a folga lateral só serve para enxergar a fileira inteira
+        nucleo = perfil.bloco.nucleo.buffer(0.02)
+        pos = tuple(q for q in pos if nucleo.contains(shapely.Point(q.x, q.y)))
     fase_global = float(np.median(fases)) if fases else None
     return ResultadoPente(bloco=perfil.bloco, posicoes=pos, fase_m=fase_global)
