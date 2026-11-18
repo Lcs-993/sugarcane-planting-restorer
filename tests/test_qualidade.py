@@ -23,7 +23,8 @@ def est(desvio=0.0, esp=1.50, le=0.48, ld=0.48, status="detectado", conf=0.9, s=
 
 def test_espacamento_gemeas_fora_da_tolerancia_gera_duvidoso():
     assert avaliar_geometria(est(esp=1.50), CFG).status == "detectado"
-    assert avaliar_geometria(est(esp=1.62), CFG).status == "detectado"  # dentro de ±0,15
+    assert avaliar_geometria(est(esp=1.56), CFG).status == "detectado"  # dentro de ±0,075
+    assert avaliar_geometria(est(esp=1.62), CFG).status == "duvidoso"
     assert avaliar_geometria(est(esp=1.80), CFG).status == "duvidoso"
     assert avaliar_geometria(est(esp=1.20), CFG).status == "duvidoso"
 
