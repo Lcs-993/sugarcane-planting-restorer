@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "linhas-plantio"
+version = "0.1.0"
+description = "Correção automática de linhas de piloto de plantio de cana a partir de ortomosaico"
+readme = "README.md"
+# Python do ambiente do usuário na criação do projeto: 3.10.12
+requires-python = ">=3.10"
+dependencies = [
+    "rasterio",
+    "geopandas",
+    "shapely",
+    "numpy",
+    "scipy",
+    "scikit-image",
+    "pyproj",
+    "pyyaml",
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "tests"]
+filterwarnings = ["ignore::PendingDeprecationWarning"]
