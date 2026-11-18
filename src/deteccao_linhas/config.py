@@ -46,6 +46,7 @@ class Config:
     semijanela_dente_m: float = 0.25  # HIPÓTESE
     dentes_por_janela_fase: int = 4  # HIPÓTESE
     proeminencia_min: float = 0.10  # HIPÓTESE; em fração de vegetação do perfil
+    proeminencia_saturacao: float = 0.50  # HIPÓTESE (acrescentado); proeminência que dá contraste = 1
     largura_faixa_min_m: float = 0.45  # premissa do projeto
     largura_faixa_max_m: float = 0.50  # premissa do projeto
     tolerancia_largura_m: float = 0.15  # HIPÓTESE
@@ -127,6 +128,8 @@ class Config:
             erro("pesos_confianca devem somar 1.")
         if self.proeminencia_min <= 0:
             erro("proeminencia_min deve ser > 0.")
+        if self.proeminencia_saturacao <= self.proeminencia_min:
+            erro("proeminencia_saturacao deve ser maior que proeminencia_min.")
 
 
 @dataclass(frozen=True)

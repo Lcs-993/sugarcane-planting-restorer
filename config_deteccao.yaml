@@ -37,6 +37,7 @@ tolerancia_espacamento_m: 0.20     # HIPÓTESE
 semijanela_dente_m: 0.25           # HIPÓTESE
 dentes_por_janela_fase: 4          # HIPÓTESE
 proeminencia_min: 0.10             # HIPÓTESE
+proeminencia_saturacao: 0.50       # HIPÓTESE (acrescentado na implementação)
 largura_faixa_min_m: 0.45          # premissa do projeto
 largura_faixa_max_m: 0.50          # premissa do projeto
 tolerancia_largura_m: 0.15         # HIPÓTESE
