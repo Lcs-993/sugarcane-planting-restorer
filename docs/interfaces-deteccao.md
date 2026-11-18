@@ -594,3 +594,18 @@ Um arquivo por módulo. Dados sintéticos: fileiras retas com vãos, erva fora d
 8. `trechos` como ponto por bloco (adotado) ou segmento por bloco.
 9. Pareamento na comparação: um único limite de distância (0,50 m) e a linha mais próxima. Há risco de parear com a fileira vizinha se as linhas recebidas estiverem deslocadas perto de 0,75 m; o relatório mostra o viés para revelar isso. Aceitar?
 10. Nome do atributo de confiança da camada `fileiras`: `confianca_media` (adotado).
+
+## 9. Desvios das interfaces na implementação
+
+Registrados ao implementar (nenhum altera o contrato de saída):
+
+1. `Bloco.poligono` (campo novo): bloco recortado pela região, em coordenadas do mapa; `s0_m` e `comprimento_m` descrevem o trecho coberto pelo polígono. Evita contar o mesmo pixel em regiões vizinhas. Cantos com menos de 2 m de comprimento ou 3 m de extensão lateral são descartados.
+2. `rastrear_com_descartes` (função nova) devolve também o número de trilhas descartadas por comprimento mínimo; `rastrear` chama essa função.
+3. `gravar_diferencas` recebe também o caminho da referência e a `ConfigComparacao`, porque o relatório agregado não guarda as distâncias por trecho. Grava a camada `diferencas`.
+4. `calcular_limiar_otsu`: a 1ª passagem (faixa do índice) usa resolução de 0,30 m, com faixa ampliada em 5 % e índice cortado nessa faixa na 2ª passagem. Evita decodificar o raster inteiro duas vezes na resolução de trabalho.
+5. `Config` ganhou parâmetros hipótese: `confianca_min_direcao`, `sigma_suavizacao_perfil_m`, `cobertura_min_bloco`, `max_pontos_orientacao`, `lateral_minima_bloco_m`, `distancia_min_picos_m`, `distancia_fusao_picos_m`, `proeminencia_saturacao`. Todos sem fonte lida.
+6. `ajustar_bloco` já devolve a confiança de cada posição (usa `qualidade.calcular_confianca`).
+7. Orientação: o critério de escolha do ângulo (variância ponderada do perfil de fração de vegetação suavizado por Savitzky-Golay) é decisão de implementação e não foi conferido contra o método de Ferreira et al. (2025): hipótese. Região confiável que destoa das vizinhas só passa a herdar se as vizinhas concordarem entre si ou se também destoar da direção global.
+8. Rastreamento: a trilha é elegível a um bloco se o rastro projetado, no intervalo `s` do bloco, toca o polígono (o ponto no meio do intervalo pode cair fora de bloco recortado). Verificado no piloto: a regra anterior duplicava fileiras.
+9. `trechos` traz só os atributos da tabela da seção 6.8; `id_bloco` não é gravado.
+10. Nomes de arquivos de teste com prefixo `test_deteccao_` (o pytest do projeto não usa `__init__.py` em `tests/`; nomes iguais aos da fase 1 colidiam).
