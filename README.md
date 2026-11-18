@@ -12,6 +12,7 @@ Fase 0: documentação, base científica e estrutura do projeto. Ainda não há 
 - docs/arquitetura.md: módulos e fluxo
 - docs/revisao-bibliografica.md: base científica e lacunas
 - docs/plano-validacao.md: como medir a acurácia
+- docs/guia-execucao.md: como rodar a detecção de fileiras no Windows (pastas de dados e arquivos .bat)
 
 ## Regra do projeto
 
