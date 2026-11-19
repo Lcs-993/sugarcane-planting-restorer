@@ -87,3 +87,18 @@ def test_talhao_invalido(tmp_path, ortho_simples):
     p = _grava(tmp_path, [gravata], ["a"])
     with pytest.raises(ErroContrato):
         carregar_entrada(tif, p, Config())
+
+
+def _com_towgs84(valores):
+    wkt = CRS.from_epsg(31983).to_wkt(version="WKT1_GDAL").replace(
+        'AUTHORITY["EPSG","6674"]]', f'TOWGS84[{",".join(map(str, valores))}],AUTHORITY["EPSG","6674"]]', 1)
+    return CRS.from_wkt(wkt)
+
+
+def test_crs_com_towgs84_nulo_equivale_ao_epsg():
+    """Um TOWGS84 todo zero (comum em .prj/GeoTIFF) não é divergência; um não nulo continua sendo."""
+    nulo = _com_towgs84([0, 0, 0, 0, 0, 0, 0])
+    verificar_crs({"ortomosaico": nulo, "talhoes": CRS.from_epsg(31983)})
+    verificar_crs({"ortomosaico": CRS.from_epsg(31983), "talhoes": nulo})
+    with pytest.raises(ErroCRS):
+        verificar_crs({"ortomosaico": _com_towgs84([10, 20, 30, 0, 0, 0, 0]), "talhoes": CRS.from_epsg(31983)})

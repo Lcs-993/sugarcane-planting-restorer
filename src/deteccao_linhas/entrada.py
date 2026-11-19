@@ -22,6 +22,18 @@ def _rotulo_crs(crs: CRS) -> str:
     return f"{auth[0]}:{auth[1]}" if auth else crs.name
 
 
+def _sem_towgs84_nulo(crs: CRS) -> CRS:
+    """Remove só uma transformação TOWGS84 com todos os parâmetros nulos (aparece em alguns .prj/GeoTIFF
+    e faz o pyproj tratar o CRS como "amarrado", diferente do EPSG igual). Transformação não nula é mantida,
+    portanto continua contando como divergência. Não reprojeta nada."""
+    if not crs.is_bound:
+        return crs
+    params = crs.to_json_dict().get("transformation", {}).get("parameters", [])
+    if params and all(float(p.get("value", 1.0)) == 0.0 for p in params):
+        return crs.source_crs
+    return crs
+
+
 def verificar_crs(camadas: dict[str, CRS | None]) -> None:
     """Compara por equivalência (CRS.equals). O primeiro item é a referência. Não reprojeta.
 
@@ -34,15 +46,15 @@ def verificar_crs(camadas: dict[str, CRS | None]) -> None:
         raise ErroCRS(f"CRS ausente em: {', '.join(ausentes)}. Defina o CRS dessas camadas antes de rodar.")
     nomes = list(camadas)
     ref_nome = nomes[0]
-    ref = camadas[ref_nome]
-    divergentes = [n for n in nomes[1:] if not camadas[n].equals(ref)]
+    ref = _sem_towgs84_nulo(camadas[ref_nome])
+    divergentes = [n for n in nomes[1:] if not _sem_towgs84_nulo(camadas[n]).equals(ref)]
     if divergentes:
         lista = "; ".join(f"{n}={_rotulo_crs(c)}" for n, c in camadas.items())
         raise ErroCRS(
             f"CRS divergente: {lista}. Divergem do {ref_nome}: {', '.join(divergentes)}. "
             "Reprojete as camadas antes de rodar."
         )
-    for nome, crs in camadas.items():
+    for nome, crs in ((n, _sem_towgs84_nulo(c)) for n, c in camadas.items()):
         unidade = crs.axis_info[0].unit_name.lower() if crs.axis_info else ""
         if not crs.is_projected or unidade not in ("metre", "meter"):
             raise ErroCRS(f"CRS de {nome} ({_rotulo_crs(crs)}) não é projetado em metros.")
