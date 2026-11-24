@@ -18,6 +18,7 @@ Na detecção atual, a etapa ExG + Otsu (hipótese H6 de docs/escopo-deteccao.md
 5. Rótulos de treino por pseudo-rótulo gerado pela própria detecção atual (seção 6), mais correção manual pontual no QGIS.
 6. Sem API externa. Modelos de linguagem (OpenCode, API da Nvidia e similares) não entram no fluxo de processamento: não devolvem posição em centímetros, não são reprodutíveis para validação contra RTK e exigiriam enviar as imagens para fora. Podem ser usados só como assistentes de programação.
 7. O plugin AIGeo Classificador IA (`referencias/plgins/`) é referência de interface (coleta de amostras por polígono e refino por polígono). Seu código é GPL-3 e não é copiado. Ele lê o raster inteiro na memória, o que este projeto não faz.
+8. (2026-11-24, depois do primeiro teste na area_01) O foco da máscara é identificar a cana. A daninha é secundária. Nos pseudo-rótulos, o verde fora da faixa deixa de virar daninha (seção 6, regra 4): na area_01, com a cana nova, a folha passava da faixa mais a margem e foi rotulada como daninha. A daninha só entra por polígono manual. A regra antiga fica disponível com `daninha_por_posicao: true`.
 
 ## 3. Classes
 
@@ -54,7 +55,7 @@ Gerados a partir de uma execução da detecção atual (ExG + Otsu) em talhões 
 1. Só entram trechos com status `detectado` e confiança acima de um limiar (hipótese). Trechos `interpolado` e `duvidoso` e seus vizinhos ficam como ignorado.
 2. Pixel verde dentro da faixa da fileira (largura de 45 a 50 cm, premissa do projeto) → cana.
 3. Pixel verde numa zona de margem ao redor da faixa → ignorado, porque o perfilhamento passa da faixa nominal. Largura da margem: hipótese.
-4. Pixel verde fora das faixas e das margens → daninha.
+4. Pixel verde fora das faixas e das margens → ignorado (padrão, seção 2, item 8). Com `daninha_por_posicao: true` → daninha.
 5. Pixel não verde → fundo.
 6. Sombra: não sai da detecção. Rotulada à mão ou por regra de brilho (hipótese), a decidir na implementação.
 
@@ -102,6 +103,7 @@ Risco conhecido: o modelo herda os erros do método atual. Por isso nenhuma mét
 | M3 | O contexto espacial da U-Net separa cana de daninha melhor que o pixel isolado. |
 | M4 | Pseudo-rótulos de trechos confiáveis bastam para treinar sem rotulagem manual extensa. |
 | M5 | Um modelo treinado uma vez em vários talhões vale para talhões novos da mesma região. |
+| M6 | Para localizar o centro da fileira, uma máscara só do miolo da fileira, sem a borda da folha, é melhor que a máscara da cana inteira (seção 11.1). |
 
 ## 10. Pendências
 1. Ambiente de treino do nível 2: GPU local ou Google Colab.
@@ -134,11 +136,28 @@ Decisões tomadas na implementação. Todas são hipóteses, sem fonte lida, con
 | `margem_faixa_m` | 0,20 | Seção 6, regra 3. |
 | `meia_largura_zona_m` | 0,75 | Metade do espaçamento: só se rotula ao redor de trechos confiáveis. Fora disso fica ignorado, e uma fileira que a detecção perdeu não vira daninha. |
 | `sombra_brilho_max` | 0 (desligado) | Pendência 3 da seção 10: por padrão, sombra só por polígono manual. |
+| `daninha_por_posicao` | false | Seção 2, item 8. Sem polígonos de daninha, o modelo aprende só cana contra fundo. |
 | Verde do pseudo-rótulo | ExG normalizado ≥ Otsu do talhão | Histograma fixo de 3000 bins em [−1, 2]: o limiar pode diferir um pouco do da detecção (256 bins na faixa observada). |
 | `n_arvores`, `max_amostras_por_classe` | 100; 50.000 | |
 | Sombra e ignorado na detecção | `validade = False` | Hipótese da seção 5, mantida. |
 
 Testes em `tests/mascaras/` e `tests/deteccao_linhas/test_deteccao_fonte_mascara.py`, todos sobre imagem sintética com cores separáveis de propósito. Mostram que o fluxo funciona, não que M1 a M5 valem.
+
+### 11.1 Primeiro teste em imagem real (area_01, 2026-11-24)
+
+Três talhões, cana nova. O modelo foi treinado e aplicado na mesma área. A referência é `linhas_fileiras_cana_projetadas`, ou seja, o projeto, não RTK: a deriva real aparece como diferença. Nada abaixo é acurácia.
+
+| | ExG + Otsu | Máscara 1 (`daninha_por_posicao: true`) | Máscara 2 (padrão) |
+|---|---|---|---|
+| Fileiras | 1.299 | 1.005 | 1.327 |
+| Trilhas descartadas (< 30 m) | 1.509 | 690 | 1.544 |
+| Pontos duvidosos | 2.835 | 4.528 | 2.645 |
+| Cobertura da referência | 75,8% | 85,7% | 75,1% |
+| Diferença mediana / p95 | 10,1 / 39,8 cm | 9,4 / 37,4 cm | 10,2 / 39,7 cm |
+
+- Inspeção no QGIS: na máscara 1, a "daninha" era sobretudo a borda da folha da cana, que passa da faixa mais a margem. Daí a decisão da seção 2, item 8.
+- A máscara 2 acha a cana inteira e repete o ExG + Otsu na detecção. Sem daninha no treino, ela é um "verde contra solo" aprendido.
+- O ganho da máscara 1 parece vir de tirar a borda da folha e deixar só o miolo da fileira (hipótese M6), não de separar daninha. A confirmação depende do RTK e de um teste em área fora do treino.
 
 ## 12. Fora deste escopo
 Detecção de plantas individuais, modelos de linguagem ou de visão por API, transformada de Hough, operações morfológicas como refino (Ribeiro, 2023, não viu melhora), e plugin QGIS.

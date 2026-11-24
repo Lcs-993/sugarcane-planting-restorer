@@ -10,7 +10,8 @@ Regras (todas HIPÓTESE, menos a largura da faixa, que é premissa):
 3. Na zona, verde (ExG normalizado >= Otsu do talhão):
    - dentro da faixa do trecho confiável (largura_faixa_m) -> cana;
    - dentro da faixa mais a margem de qualquer fileira detectada -> ignorado (perfilhamento);
-   - fora disso -> daninha.
+   - fora disso -> ignorado (padrão; o foco é a cana e a folha passa da faixa) ou, com
+     `daninha_por_posicao`, daninha. Sem essa opção, daninha só vem dos polígonos manuais (regra 5).
 4. Na zona, não verde -> fundo; com `sombra_brilho_max` > 0, não verde e mais escuro que isso -> sombra.
 5. Polígonos de correção manual (campo `classe`) sobrescrevem tudo, na ordem do arquivo.
 O pseudo-rótulo herda os erros do método atual: não serve para avaliar (seção 8).
@@ -231,7 +232,8 @@ def rotular_janela(bandas: np.ndarray, valido: np.ndarray, limiar: np.ndarray, n
     if cfg.sombra_brilho_max > 0:
         escuro = bandas.mean(axis=0) < cfg.sombra_brilho_max
         rot[ok & ~verde & escuro] = SOMBRA
-    rot[ok & verde & ~na_margem] = DANINHA
+    if cfg.daninha_por_posicao:
+        rot[ok & verde & ~na_margem] = DANINHA
     rot[ok & verde & na_faixa] = CANA
     return rot
 

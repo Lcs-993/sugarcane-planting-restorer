@@ -40,6 +40,10 @@ class ConfigMascaras:
     margem_faixa_m: float = 0.20  # HIPÓTESE; perfilhamento além da faixa nominal: verde ali é ignorado
     meia_largura_zona_m: float = 0.75  # HIPÓTESE; só se rotula até esta distância do eixo de um trecho confiável
     sombra_brilho_max: float = 0.0  # HIPÓTESE; > 0 liga a regra: média RGB (0-255) abaixo disto e não verde -> sombra
+    # Foco é identificar a cana (decisão de 2026-11-24). False: verde fora da faixa fica "ignorado" e a daninha
+    # só entra por polígono manual. True: verde fora da faixa + margem vira "daninha" (regra original da seção 6);
+    # na area_01 isso rotulou folha de cana como daninha.
+    daninha_por_posicao: bool = False
 
     # Saída da classificação
     gravar_probabilidade_cana: bool = False

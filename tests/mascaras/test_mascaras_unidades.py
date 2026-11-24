@@ -124,7 +124,10 @@ def test_regras_por_pixel():
     zona = np.array([[1, 1, 1, 1, 1, 0]], dtype=bool)
     faixa = np.array([[1, 0, 0, 0, 0, 0]], dtype=bool)
     margem = np.array([[1, 1, 0, 0, 0, 0]], dtype=bool)
+    # padrão (foco na cana): verde fora da faixa fica ignorado, nunca daninha
     rot = rotular_janela(bandas, valido, limiar, zona, faixa, margem, ConfigMascaras())
+    assert rot.tolist() == [[CANA, IGNORADO, IGNORADO, FUNDO, FUNDO, IGNORADO]]
+    rot = rotular_janela(bandas, valido, limiar, zona, faixa, margem, ConfigMascaras(daninha_por_posicao=True))
     assert rot.tolist() == [[CANA, IGNORADO, DANINHA, FUNDO, FUNDO, IGNORADO]]
     rot = rotular_janela(bandas, valido, limiar, zona, faixa, margem, ConfigMascaras(sombra_brilho_max=40))
     assert rot[0, 4] == SOMBRA

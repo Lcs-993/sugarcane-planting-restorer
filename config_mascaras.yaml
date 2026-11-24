@@ -26,6 +26,7 @@ largura_faixa_m: 0.45              # premissa (45 a 50 cm): o mínimo, para o r�
 margem_faixa_m: 0.20               # HIPÓTESE; perfilhamento além da faixa: verde ali fica ignorado
 meia_largura_zona_m: 0.75          # HIPÓTESE; só se rotula até esta distância do eixo da fileira confiável
 sombra_brilho_max: 0.0             # HIPÓTESE; 0 = desligado (sombra só por polígono manual)
+daninha_por_posicao: false         # foco na cana: verde fora da faixa fica ignorado; daninha só por polígono manual
 
 # Classificação
 gravar_probabilidade_cana: false
