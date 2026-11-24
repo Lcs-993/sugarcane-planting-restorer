@@ -1,6 +1,9 @@
 @echo off
 chcp 65001 >nul
 setlocal
+rem PROJ_LIB/PROJ_DATA de outro programa (ex.: PostGIS) quebram o rasterio: ele usa a PROJ que vem junto
+set PROJ_LIB=
+set PROJ_DATA=
 cd /d "%~dp0.."
 if not exist ".venv\Scripts\python.exe" (echo Rode scripts\instalar.bat primeiro. & pause & exit /b 1)
 set AREA=%~1

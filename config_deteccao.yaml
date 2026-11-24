@@ -9,7 +9,8 @@ bandas_rgb: [1, 2, 3]              # numeração do rasterio, base 1
 resolucao_trabalho_m: 0.06         # HIPÓTESE; redução por média de área
 n_bins_otsu: 256                   # HIPÓTESE
 buffer_interno_m: 5.0              # HIPÓTESE
-perfil_sobre: binario              # HIPÓTESE; "indice" não implementado
+perfil_sobre: binario              # HIPÓTESE; "mascara" usa a máscara de classes (python -m mascaras); "indice" não implementado
+# caminho_mascara: dados/areas/area_01/entrada/mascara/mascara.tif   # só com perfil_sobre: mascara (ou use --mascara)
 
 # Orientação
 regiao_m: 150.0                    # HIPÓTESE

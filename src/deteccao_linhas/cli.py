@@ -8,12 +8,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from .comparacao import RelatorioComparacao, comparar, gravar_diferencas
 from .config import Config, ConfigComparacao, carregar_config, carregar_config_comparacao
 from .entrada import carregar_entrada
+from .fonte_mascara import abrir_fonte_mascara, abrir_raster_mascara
 from .indice_binarizacao import (abrir_fonte_binaria, abrir_fonte_indice, calcular_limiar_otsu,
                                  recortar_talhao)
 from .orientacao import dividir_em_regioes, estimar_campo_direcao, estimar_direcoes
@@ -29,18 +30,30 @@ PASSO_PROGRESSO = 25  # blocos entre mensagens de progresso
 
 def executar_deteccao(caminho_ortomosaico: Path, caminho_talhoes: Path, caminho_saida: Path,
                       cfg: Config) -> list[ResumoDeteccao]:
-    """Orquestra o fluxo da seção 5 talhão a talhão e grava o GeoPackage."""
+    """Orquestra o fluxo da seção 5 talhão a talhão e grava o GeoPackage.
+
+    Com cfg.perfil_sobre == "mascara", a fonte do perfil é a máscara de classes (só a classe cana conta
+    como vegetação) e não há limiar de Otsu (limiar_otsu = NaN no resumo). O resto do fluxo não muda.
+    """
     dados = carregar_entrada(caminho_ortomosaico, caminho_talhoes, cfg)
-    fonte = abrir_fonte_indice(dados.caminho_ortomosaico, cfg)
+    usa_mascara = cfg.perfil_sobre == "mascara"
+    fonte = None if usa_mascara else abrir_fonte_indice(dados.caminho_ortomosaico, cfg)
+    raster_mascara = (abrir_raster_mascara(Path(cfg.caminho_mascara), dados.crs, cfg.resolucao_trabalho_m)
+                      if usa_mascara else None)
     resumos: list[ResumoDeteccao] = []
     todas: list[Fileira] = []
     try:
         for talhao in dados.talhoes:
-            print(f"[{talhao.id}] área útil e limiar de Otsu...", flush=True)
             area = recortar_talhao(talhao, cfg)
-            limiar = calcular_limiar_otsu(fonte, area, cfg)
-            fb = abrir_fonte_binaria(fonte, area, limiar, cfg)
-            print(f"[{talhao.id}] limiar={limiar:.4f}; orientação por região...", flush=True)
+            if usa_mascara:
+                limiar = float("nan")
+                fb = abrir_fonte_mascara(raster_mascara, area, cfg.resolucao_trabalho_m)
+                print(f"[{talhao.id}] perfil sobre a máscara de classes; orientação por região...", flush=True)
+            else:
+                print(f"[{talhao.id}] área útil e limiar de Otsu...", flush=True)
+                limiar = calcular_limiar_otsu(fonte, area, cfg)
+                fb = abrir_fonte_binaria(fonte, area, limiar, cfg)
+                print(f"[{talhao.id}] limiar={limiar:.4f}; orientação por região...", flush=True)
             c = area.poligono_util.centroid
             if cfg.modo_blocos == "faixas":
                 campo, regioes, u_ref = estimar_campo_direcao(fb, area, cfg)
@@ -73,7 +86,10 @@ def executar_deteccao(caminho_ortomosaico: Path, caminho_talhoes: Path, caminho_
             print(f"[{talhao.id}] {len(fileiras)} fileiras; pontos {contagem}; "
                   f"{descartadas} trilhas descartadas por comprimento", flush=True)
     finally:
-        fonte.fechar()
+        if fonte is not None:
+            fonte.fechar()
+        if raster_mascara is not None:
+            raster_mascara.fechar()
     gravar_geopackage(todas, dados.crs, caminho_saida)
     return resumos
 
@@ -93,6 +109,8 @@ def _parser() -> argparse.ArgumentParser:
     d.add_argument("--talhoes", required=True, type=Path)
     d.add_argument("--saida", required=True, type=Path)
     d.add_argument("--config", type=Path, default=None)
+    d.add_argument("--mascara", type=Path, default=None,
+                   help="GeoTIFF de classes (python -m mascaras classificar); liga perfil_sobre=mascara")
     c = sub.add_parser("comparar", help="compara as fileiras detectadas com uma referência secundária")
     c.add_argument("--fileiras", required=True, type=Path)
     c.add_argument("--referencia", required=True, type=Path)
@@ -113,6 +131,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.comando == "detectar":
             cfg = carregar_config(args.config)
+            if args.mascara is not None:
+                cfg = replace(cfg, perfil_sobre="mascara", caminho_mascara=str(args.mascara))
             resumos = executar_deteccao(args.ortomosaico, args.talhoes, args.saida, cfg)
             print(f"Fileiras gravadas em {args.saida}")
             for r in resumos:

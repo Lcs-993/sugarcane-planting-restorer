@@ -22,7 +22,10 @@ class Config:
     resolucao_trabalho_m: float = 0.06  # HIPÓTESE; redução por média de área
     n_bins_otsu: int = 256  # HIPÓTESE
     buffer_interno_m: float = 5.0  # HIPÓTESE
-    perfil_sobre: Literal["binario", "indice"] = "binario"  # HIPÓTESE; "indice" não implementado
+    perfil_sobre: Literal["binario", "indice", "mascara"] = "binario"  # HIPÓTESE; "indice" não implementado
+    # perfil_sobre="mascara": o perfil usa a máscara de classes (cana) do pacote mascaras em vez do ExG + Otsu
+    # (docs/escopo-mascaras.md, seção 5). caminho_mascara: GeoTIFF de classes; também pode vir de --mascara.
+    caminho_mascara: str | None = None
 
     # Orientação
     regiao_m: float = 150.0  # HIPÓTESE; lado das regiões de estimativa de direção
@@ -112,9 +115,11 @@ class Config:
         if self.variante_exg not in ("normalizado", "bruto"):
             erro(f"variante_exg inválida: {self.variante_exg!r}.")
         if self.perfil_sobre == "indice":
-            erro("perfil_sobre='indice' não foi implementado nesta versão; use 'binario'.")
-        if self.perfil_sobre != "binario":
-            erro(f"perfil_sobre inválido: {self.perfil_sobre!r}.")
+            erro("perfil_sobre='indice' não foi implementado nesta versão; use 'binario' ou 'mascara'.")
+        if self.perfil_sobre not in ("binario", "mascara"):
+            erro(f"perfil_sobre inválido: {self.perfil_sobre!r}. Use 'binario' ou 'mascara'.")
+        if self.perfil_sobre == "mascara" and not self.caminho_mascara:
+            erro("perfil_sobre='mascara' exige caminho_mascara (ou a opção --mascara).")
         if len(self.bandas_rgb) != 3 or any(int(b) < 1 for b in self.bandas_rgb):
             erro("bandas_rgb deve ter três números de banda (base 1).")
         positivos = (

@@ -1,0 +1,31 @@
+# Configuração de exemplo do pacote de máscaras (src/mascaras, docs/escopo-mascaras.md).
+# Nenhum valor abaixo foi validado em campo: os marcados como HIPÓTESE são parâmetros a ajustar.
+
+# Leitura
+bandas_rgb: [1, 2, 3]              # numeração do rasterio, base 1
+resolucao_trabalho_m: 0.06         # HIPÓTESE; tem de ser igual à resolucao_trabalho_m da detecção
+lado_janela_px: 1024               # memória; múltiplo de 256
+campo_id_talhao: id
+buffer_interno_m: 5.0              # HIPÓTESE; o mesmo da detecção
+
+# Atributos por pixel (nível 1)
+atributos: [r, g, b, exg, gli]     # HIPÓTESE; GLI usado por Barrozo et al. (2025)
+raio_vizinhanca_px: 0              # HIPÓTESE; > 0 acrescenta média e desvio do ExG na vizinhança
+
+# Random Forest (nível 1)
+n_arvores: 100                     # HIPÓTESE
+profundidade_max: 0                # HIPÓTESE; 0 = sem limite
+max_amostras_por_classe: 50000     # HIPÓTESE
+semente: 0
+n_jobs: -1                         # -1 = todos os núcleos
+
+# Pseudo-rótulos
+limiar_confianca_pseudo: 0.70      # HIPÓTESE
+vizinhos_excluidos: 1              # HIPÓTESE
+largura_faixa_m: 0.45              # premissa (45 a 50 cm): o mínimo, para o rótulo cana ser conservador
+margem_faixa_m: 0.20               # HIPÓTESE; perfilhamento além da faixa: verde ali fica ignorado
+meia_largura_zona_m: 0.75          # HIPÓTESE; só se rotula até esta distância do eixo da fileira confiável
+sombra_brilho_max: 0.0             # HIPÓTESE; 0 = desligado (sombra só por polígono manual)
+
+# Classificação
+gravar_probabilidade_cana: false

@@ -18,7 +18,8 @@ Ferramenta de correção de linhas de piloto automático de cana a partir de ort
 ## Limites
 - Não comentar qualidade, georreferenciamento ou parâmetros do ortomosaico: é responsabilidade do usuário.
 - Variedade e estágio da cultura não são parâmetros: o operador decide o momento do voo.
-- Detecção de plantas daninhas está fora desta versão. O módulo de máscaras deve ser independente para reaproveitamento futuro.
+- Daninha entra só como classe da máscara de segmentação (docs/escopo-mascaras.md), para ser excluída do perfil das fileiras. Mapeamento de daninha como produto continua fora. O módulo `src/mascaras` é independente.
+- Sem API externa de IA no fluxo de processamento: modelos locais e gratuitos apenas.
 
 ## Estilo de código
 - Motor em Python, independente do QGIS. A interface do QGIS só chama o motor.
