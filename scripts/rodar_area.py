@@ -29,9 +29,14 @@ CONFIG_PADRAO = RAIZ / "config_deteccao.yaml"
 
 
 def _unico(entrada: Path, pastas: list[str], padroes: list[str], rotulo: str, obrigatorio: bool) -> Path | None:
-    """Procura o arquivo na primeira pasta que existir, na ordem de `pastas` (nomes alternativos)."""
-    pasta = next((entrada / n for n in pastas if (entrada / n).is_dir()), entrada / pastas[0])
-    achados = sorted(p for padrao in padroes for p in pasta.glob(padrao) if p.is_file())
+    """Procura o arquivo na primeira pasta, na ordem de `pastas` (nomes alternativos), que tiver um arquivo
+    do tipo pedido. Uma pasta vazia (só com .gitkeep) não esconde o nome alternativo."""
+    def _achados(pasta: Path) -> list[Path]:
+        return sorted(p for padrao in padroes for p in pasta.glob(padrao) if p.is_file())
+
+    existentes = [entrada / n for n in pastas if (entrada / n).is_dir()]
+    pasta = next((p for p in existentes if _achados(p)), existentes[0] if existentes else entrada / pastas[0])
+    achados = _achados(pasta)
     if not achados:
         if obrigatorio:
             sys.exit(f"ERRO: nenhum arquivo de {rotulo} em {pasta}. Coloque o arquivo nessa pasta.")

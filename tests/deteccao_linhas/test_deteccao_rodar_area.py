@@ -76,6 +76,20 @@ def test_rodar_area_aceita_nomes_alternativos_das_pastas(tmp_path):
     assert (exec_ / "relatorio_comparacao.json").exists()
 
 
+def test_pasta_vazia_nao_esconde_nome_alternativo(tmp_path):
+    """Caso da area_01: talhoes/ e referencia/ só com .gitkeep, arquivos nos nomes alternativos."""
+    area = _area(tmp_path)
+    (area / "entrada/talhoes").rename(area / "entrada/poligonos_talhoes")
+    (area / "entrada/referencia").rename(area / "entrada/linhas_fileiras_cana_projetadas")
+    for d in ("talhoes", "referencia"):
+        (area / "entrada" / d).mkdir()
+        (area / "entrada" / d / ".gitkeep").write_text("")
+    r = _rodar(area)
+    assert r.returncode == 0, r.stdout + r.stderr
+    exec_ = [p for p in (area / "saida").iterdir() if p.is_dir()][0]
+    assert (exec_ / "relatorio_comparacao.json").exists()
+
+
 def test_rodar_area_usa_mascara_se_existir(tmp_path):
     """Com um GeoTIFF em entrada/mascara, a detecção roda com perfil sobre a máscara de classes."""
     from test_deteccao_fonte_mascara import gerar_mascara
