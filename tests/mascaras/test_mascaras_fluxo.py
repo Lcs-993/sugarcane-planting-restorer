@@ -21,7 +21,9 @@ from mascaras.treino import ParTreino, treinar
 from sinteticos_mascaras import (CRS_M, ORIGEM, centros_fileiras, gerar_deteccao, gerar_orto, gerar_talhao,
                                  manchas_daninha)
 
-CFG = ConfigMascaras(buffer_interno_m=1.0, n_arvores=20, max_amostras_por_classe=4000, n_jobs=1)
+# daninha_por_posicao=True para exercitar as três classes no fluxo; o padrão está em test_padrao_foco_na_cana
+CFG = ConfigMascaras(buffer_interno_m=1.0, n_arvores=20, max_amostras_por_classe=4000, n_jobs=1,
+                     daninha_por_posicao=True)
 
 
 @pytest.fixture
@@ -164,3 +166,16 @@ def test_cli_ponta_a_ponta(area, capsys):
     assert main(["classificar", "--ortomosaico", str(orto), "--talhoes", str(tal), "--modelo", str(d / "nao.joblib"),
                  "--saida", str(d / "mc2.tif")]) == 2
     assert "não encontrado" in capsys.readouterr().err
+
+
+def test_padrao_foco_na_cana(area):
+    """Padrão: nenhuma daninha por posição; a mancha entre fileiras fica ignorada e o modelo aprende cana x fundo."""
+    d, orto, tal, det, dan = area
+    cfg = ConfigMascaras(buffer_interno_m=1.0, n_arvores=10, max_amostras_por_classe=2000, n_jobs=1)
+    res = gerar_pseudo_rotulos(orto, tal, det, d / "rot_cana.tif", cfg)
+    assert res.pixels_por_classe["daninha"] == 0 and res.pixels_por_classe["cana"] > 0
+    with rasterio.open(d / "rot_cana.tif") as ds:
+        x, y, _ = next(m for m in dan if 2 < m[1] < 24)
+        assert _px(ds, x, y) == IGNORADO
+    meta = treinar([ParTreino(orto, d / "rot_cana.tif")], d / "m.joblib", cfg)
+    assert set(meta.classes.values()) == {"cana", "fundo"}
