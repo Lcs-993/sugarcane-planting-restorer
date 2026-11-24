@@ -1,8 +1,8 @@
 # Guia de execução (detecção de fileiras)
 
-Como rodar a ferramenta `deteccao_linhas` por conta própria, no Windows, com três arquivos `.bat`.
+Como rodar a ferramenta `deteccao_linhas` por conta própria, no Windows, com três arquivos `.bat`, e o fluxo da máscara de classes com o `mascaras.bat` (seção 5).
 
-**Aviso:** os `.bat` não foram testados no Windows (foram escritos e conferidos em Linux). O script Python que eles chamam (`scripts/rodar_area.py`) tem testes automatizados. Se algo falhar, a mensagem aparece na janela e fica em `log.txt`.
+**Aviso:** `instalar.bat`, `nova_area.bat` e `rodar_area.bat` foram escritos e conferidos em Linux, sem teste no Windows. O `mascaras.bat` foi testado no Windows, pelo menu e por argumentos, com entrada redirecionada no lugar do teclado. Os scripts Python que eles chamam (`scripts/rodar_area.py` e `scripts/mascaras_area.py`) têm testes automatizados. Se algo falhar, a mensagem aparece na janela e fica em `log.txt`.
 
 ## 1. Instalar (uma vez)
 
@@ -25,10 +25,14 @@ dados\areas\area_01\
                    (também vale o nome linhas_fileiras_cana_projetadas\)
     mds\           reservada para o teste opcional do modelo de terreno (ainda não é lida)
     mdt\           reservada para o mesmo teste (ainda não é lida)
-    mascara\       (opcional) GeoTIFF de classes gerado por "python -m mascaras classificar"
-                   (seção 5); se existir, o perfil das fileiras usa a classe cana dele
+    mascara\       (opcional) GeoTIFF de classes gravado pelo passo "classificar" do
+                   mascaras.bat (seção 5); se existir, o perfil das fileiras usa a classe cana dele
+    correcoes_mascara\  (opcional) polígonos que corrigem os pseudo-rótulos (seção 5)
+    teste_mascara\      (opcional) polígonos de teste desenhados à mão (seção 5)
+  rotulos\         criada pelo passo "pseudo" do mascaras.bat
   saida\           os resultados; cada execução cria uma subpasta com data e hora
   config.yaml      (opcional) parâmetros da detecção desta área
+  config_mascaras.yaml  (opcional) parâmetros das máscaras desta área; senão usa o da raiz
 ```
 
 Regras de cada pasta:
@@ -61,27 +65,25 @@ Por padrão usa `config_deteccao.yaml` na raiz. Para mudar numa área só, copie
 
 ## 5. Máscara de classes (opcional, v0.2)
 
-Troca o ExG + Otsu por uma máscara que separa cana, daninha, fundo e sombra (docs/escopo-mascaras.md). É opcional: sem a pasta `entrada\mascara`, nada muda. Os comandos abaixo rodam na pasta do projeto, com o ambiente ativado (`.venv\Scripts\activate.bat`, e `set PROJ_LIB=` se for o caso da seção 1). Troque `<data_hora>` pela pasta da execução.
+Troca o ExG + Otsu por uma máscara que separa cana, daninha, fundo e sombra (docs/escopo-mascaras.md). É opcional: sem arquivo em `entrada\mascara`, nada muda.
 
-1. **Detecção atual** numa área de treino: `scripts\rodar_area.bat area_01`.
-2. **Pseudo-rótulos** a partir dessa execução. `--correcoes` é opcional: polígonos desenhados no QGIS com um campo `classe` (`cana`, `daninha`, `fundo`, `sombra`, `ignorado`, ou os códigos 1, 2, 3, 4, 0). O último polígono do arquivo prevalece.
-   ```
-   python -m mascaras pseudo-rotulos --ortomosaico dados\areas\area_01\entrada\ortomosaico\orto.tif --talhoes dados\areas\area_01\entrada\talhoes\talhoes.gpkg --deteccao dados\areas\area_01\saida\<data_hora>\fileiras_detectadas.gpkg --correcoes correcoes_area_01.gpkg --saida dados\rotulos\area_01.tif --config config_mascaras.yaml
-   ```
-   Abra o `area_01.tif` no QGIS e confira. Ao lado sai o `area_01.json`, com o comprimento de fileira confiável e os pixels por classe.
-3. **Treino**, uma vez, com várias áreas (repita `--par`):
-   ```
-   python -m mascaras treinar --par <orto_area_01.tif> dados\rotulos\area_01.tif --par <orto_area_02.tif> dados\rotulos\area_02.tif --modelo dados\modelos\nivel1.joblib --config config_mascaras.yaml
-   ```
-4. **Classificação** de qualquer área, gravando a máscara em `entrada\mascara`:
-   ```
-   python -m mascaras classificar --ortomosaico <orto.tif> --talhoes <talhoes.gpkg> --modelo dados\modelos\nivel1.joblib --saida dados\areas\area_03\entrada\mascara\mascara.tif --config config_mascaras.yaml
-   ```
-5. **Detecção com a máscara**: `scripts\rodar_area.bat area_03`. A janela mostra "máscara de classes: mascara.tif".
-6. (Opcional) **IoU por classe** contra polígonos de teste desenhados e revisados à mão, num talhão que não entrou no treino: `python -m mascaras avaliar --mascara <mascara.tif> --teste <teste.gpkg> --relatorio iou.json`. Não use pseudo-rótulo como teste.
+Use `scripts\mascaras.bat`. Com dois cliques, ele mostra um menu com os quatro passos e pergunta os nomes. Da linha de comando, passe o passo direto: `scripts\mascaras.bat pseudo area_01`. As áreas são as pastas de `dados\areas`; os modelos ficam em `dados\modelos\<nome>.joblib`.
+
+1. **Detecção atual** numa área de treino: `scripts\rodar_area.bat area_01`, sem arquivo em `entrada\mascara`.
+2. **Pseudo-rótulos**: `scripts\mascaras.bat pseudo area_01`. Usa a execução mais recente da detecção que não usou máscara. Grava `rotulos\rotulos.tif` e `rotulos\rotulos.json` (comprimento de fileira confiável e pixels por classe). Os dois arquivos são refeitos a cada vez. Abra o `.tif` no QGIS e confira.
+   - Correções (opcional): um `.gpkg` ou `.shp` em `entrada\correcoes_mascara` com polígonos desenhados no QGIS e um campo `classe` (`cana`, `daninha`, `fundo`, `sombra`, `ignorado`, ou os códigos 1, 2, 3, 4, 0). O último polígono do arquivo prevalece. Depois de corrigir, rode o passo de novo.
+3. **Treino**, uma vez, com várias áreas: `scripts\mascaras.bat treinar nivel1 area_01 area_02`. Grava `dados\modelos\nivel1.joblib`, o `.json` de metadados e o `nivel1_log.txt`.
+4. **Classificação** de qualquer área: `scripts\mascaras.bat classificar area_03 nivel1`. Grava `entrada\mascara\mascara.tif`, substituindo a anterior. Se `gravar_probabilidade_cana: true`, a probabilidade vai para a pasta da execução em `saida\`, porque `entrada\mascara` só pode ter um arquivo.
+5. **Detecção com a máscara**: `scripts\rodar_area.bat area_03`. A janela mostra "máscara de classes: mascara.tif". Para voltar ao ExG + Otsu, tire o arquivo de `entrada\mascara`.
+6. (Opcional) **IoU por classe**: desenhe à mão polígonos de teste com o campo `classe` num talhão que não entrou no treino, ponha em `entrada\teste_mascara` e rode `scripts\mascaras.bat avaliar area_03`. O relatório sai em `saida\<data_hora>_mascaras_avaliar\relatorio_iou.json`. Não use pseudo-rótulo como teste.
+
+Cada passo grava um `log.txt` em `saida\<data_hora>_mascaras_<passo>\`. O do treino fica ao lado do modelo.
+
+Parâmetros: `config_mascaras.yaml` da raiz, ou o da pasta da área, se existir (passos pseudo e classificar). O treino usa o da raiz. Em qualquer passo, `--config <arquivo>` no fim da linha passa por cima.
 
 Regras:
 - `resolucao_trabalho_m` precisa ser igual em `config_mascaras.yaml` e na configuração da detecção (padrão 0,06 m). Se for diferente, a detecção para e avisa.
 - Treino e teste nunca no mesmo talhão (docs/escopo-mascaras.md, seção 8).
 - O arquivo `.joblib` é um pickle: só carregue modelos gerados por este projeto.
 - O que decide se a máscara ajuda é a comparação da detecção (ExG + Otsu contra máscara) com a referência de campo RTK, não o IoU.
+- Para rodar os comandos à mão: `python -m mascaras --help` (ambiente ativado com `.venv\Scripts\activate.bat`, e `set PROJ_LIB=` se for o caso da seção 1).

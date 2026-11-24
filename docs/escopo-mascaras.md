@@ -122,7 +122,7 @@ Implementado: nível 1 completo e a integração com a detecção. O nível 2 n�
 | `avaliacao.py` | Matriz de confusão e IoU por classe contra polígonos de teste manuais (seção 8, item 2). |
 | `cli.py` | `python -m mascaras pseudo-rotulos`, `treinar`, `classificar`, `avaliar`. |
 
-Na detecção: `perfil_sobre: mascara` e a opção `--mascara` (docs/interfaces-deteccao.md, seção 9, item 13). Em `scripts/rodar_area.py`, um GeoTIFF em `entrada/mascara/` liga esse modo.
+Na detecção: `perfil_sobre: mascara` e a opção `--mascara` (docs/interfaces-deteccao.md, seção 9, item 13). Em `scripts/rodar_area.py`, um GeoTIFF em `entrada/mascara/` liga esse modo. `scripts/mascaras.bat` (que chama `scripts/mascaras_area.py`) roda os quatro passos sobre as pastas de área (docs/guia-execucao.md, seção 5).
 
 Decisões tomadas na implementação. Todas são hipóteses, sem fonte lida, configuráveis em `config_mascaras.yaml`:
 

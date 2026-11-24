@@ -58,8 +58,9 @@ def _rodar(args: list[str], log: Path) -> int:
 
 
 def main(argv: list[str]) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    for fluxo in (sys.stdout, sys.stderr):  # mensagens com acento, também as de erro (sys.exit)
+        if hasattr(fluxo, "reconfigure"):
+            fluxo.reconfigure(encoding="utf-8", errors="replace")
     if len(argv) != 2:
         sys.exit("uso: python scripts/rodar_area.py dados/areas/<nome_da_area>")
     area = Path(argv[1]).resolve()
