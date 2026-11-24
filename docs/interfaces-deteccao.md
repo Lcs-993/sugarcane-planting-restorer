@@ -252,7 +252,8 @@ Nenhum tem fonte lida. As premissas geométricas (1,50 m; 45 a 50 cm) são do pr
 | resolucao_trabalho_m | 0,06 | Hipótese |
 | n_bins_otsu | 256 | Hipótese |
 | buffer_interno_m | 5,0 | Hipótese |
-| perfil_sobre | binario | Hipótese |
+| perfil_sobre | binario | Hipótese; `mascara` lê a máscara de classes (seção 9, item 13) |
+| caminho_mascara | (vazio) | Obrigatório com `perfil_sobre: mascara`; ou opção `--mascara` |
 | regiao_m | 150,0 | Hipótese |
 | area_minima_regiao_m2 | 2000 | Hipótese |
 | passo_angulo_grosso_graus, passo_angulo_fino_graus | 1,0; 0,1 | Hipótese |
@@ -618,3 +619,5 @@ Registrados ao implementar (nenhum altera o contrato de saída):
     - Não implementado: projeção quadrática e tolerância ligada à curvatura no rastreamento (a medição não mostrou necessidade até R = 50 m) e perfil lateral curvilíneo (blocos de 10 m com passo 5 m deram erro > 25 cm em ≤ 0,2 % dos pontos 'detectado' até R = 50 m). Limite conhecido: a ordem dos blocos usa a projeção em `u_ref`; talhão em que a direção gira perto de 180° ou mais (R = 30 m, 105 m de comprimento) não é bem tratado.
 
 12. **Verificação de CRS ignora TOWGS84 todo zero.** Um `.prj`/GeoTIFF com `TOWGS84[0,0,0,0,0,0,0]` fazia o `pyproj` tratar o CRS como "amarrado" e divergente do EPSG igual (caso real: ortomosaico e talhões ambos SIRGAS 2000 / UTM 23S). `entrada.verificar_crs` agora descarta só uma transformação com todos os parâmetros nulos antes de comparar; transformação não nula continua sendo divergência. Não reprojeta nada.
+
+13. **Perfil sobre a máscara de classes** (v0.2.0; docs/escopo-mascaras.md, seção 5). `Config.perfil_sobre` aceita `mascara`, com `Config.caminho_mascara` (ou `detectar --mascara <tif>`, que liga as duas coisas). Módulo novo `fonte_mascara.py`: `RasterMascara` abre o GeoTIFF de classes uma vez e confere CRS (mesma regra de `verificar_crs`), banda única `uint8` e resolução igual a `resolucao_trabalho_m` (tolerância de 0,1 %; diferente é `ErroConfig`, sem reamostragem silenciosa). `FonteMascara` tem a interface de `FonteBinaria`: `valores = True` só na classe cana (1); ignorado (0) e sombra (4) ficam com `validade = False` (hipótese do escopo); daninha (2) e fundo (3) ficam válidos e `False`. Leitura por janela, vizinho mais próximo. Sem Otsu nesse modo: `ResumoDeteccao.limiar_otsu = NaN`. Nenhuma outra etapa mudou. Os códigos de classe são repetidos em `fonte_mascara.py` para não importar o pacote `mascaras`.

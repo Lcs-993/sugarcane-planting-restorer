@@ -108,5 +108,37 @@ Risco conhecido: o modelo herda os erros do método atual. Por isso nenhuma mét
 2. Escolha dos talhões de treino e de teste.
 3. Regra para a classe sombra.
 
-## 11. Fora deste escopo
+## 11. Estado da implementação (v0.2.0)
+
+Implementado: nível 1 completo e a integração com a detecção. O nível 2 não foi feito, como decidido na seção 2, item 3.
+
+| Módulo (`src/mascaras`) | O que faz |
+|---|---|
+| `raster.py` | Grade de trabalho com origem no canto noroeste do ortomosaico e pixel `resolucao_trabalho_m`; leitura por janelas com redução por média de área; talhões com buffer interno; verificação de CRS (não reprojeta). |
+| `atributos.py` | R, G, B (÷255), ExG normalizado, GLI e, se `raio_vizinhanca_px` > 0, média e desvio do ExG na vizinhança (lida com borda, sem efeito de janela). |
+| `pseudo_rotulos.py` | Seção 6, a partir do GeoPackage da detecção (camadas `fileiras` e `trechos`), mais polígonos de correção manual com o campo `classe` (código ou nome). Grava o GeoTIFF de rótulos e um JSON de resumo ao lado. |
+| `treino.py` | Amostragem estratificada por classe em duas passagens por janelas; Random Forest; grava `.joblib` e `.json` de metadados (classes, bandas, resolução, atributos, versões, talhões e rótulos de treino). |
+| `inferencia.py` | Classifica por janelas, só dentro dos talhões; usa bandas, resolução e atributos dos metadados do modelo; opcional: probabilidade da classe cana. |
+| `avaliacao.py` | Matriz de confusão e IoU por classe contra polígonos de teste manuais (seção 8, item 2). |
+| `cli.py` | `python -m mascaras pseudo-rotulos`, `treinar`, `classificar`, `avaliar`. |
+
+Na detecção: `perfil_sobre: mascara` e a opção `--mascara` (docs/interfaces-deteccao.md, seção 9, item 13). Em `scripts/rodar_area.py`, um GeoTIFF em `entrada/mascara/` liga esse modo.
+
+Decisões tomadas na implementação. Todas são hipóteses, sem fonte lida, configuráveis em `config_mascaras.yaml`:
+
+| Parâmetro | Valor | Observação |
+|---|---|---|
+| `limiar_confianca_pseudo` | 0,70 | Mais alto que o `limiar_confianca` da detecção (0,50), para o rótulo de treino ser conservador. |
+| `vizinhos_excluidos` | 1 | Ponto ao lado de um interpolado ou duvidoso também fica fora. |
+| `largura_faixa_m` | 0,45 | Premissa (45 a 50 cm); usa-se o mínimo para o rótulo cana. |
+| `margem_faixa_m` | 0,20 | Seção 6, regra 3. |
+| `meia_largura_zona_m` | 0,75 | Metade do espaçamento: só se rotula ao redor de trechos confiáveis. Fora disso fica ignorado, e uma fileira que a detecção perdeu não vira daninha. |
+| `sombra_brilho_max` | 0 (desligado) | Pendência 3 da seção 10: por padrão, sombra só por polígono manual. |
+| Verde do pseudo-rótulo | ExG normalizado ≥ Otsu do talhão | Histograma fixo de 3000 bins em [−1, 2]: o limiar pode diferir um pouco do da detecção (256 bins na faixa observada). |
+| `n_arvores`, `max_amostras_por_classe` | 100; 50.000 | |
+| Sombra e ignorado na detecção | `validade = False` | Hipótese da seção 5, mantida. |
+
+Testes em `tests/mascaras/` e `tests/deteccao_linhas/test_deteccao_fonte_mascara.py`, todos sobre imagem sintética com cores separáveis de propósito. Mostram que o fluxo funciona, não que M1 a M5 valem.
+
+## 12. Fora deste escopo
 Detecção de plantas individuais, modelos de linguagem ou de visão por API, transformada de Hough, operações morfológicas como refino (Ribeiro, 2023, não viu melhora), e plugin QGIS.

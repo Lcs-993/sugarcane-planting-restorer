@@ -9,6 +9,8 @@ Convenção de pastas (ver docs/guia-execucao.md):
                        linhas de referência, para comparar
   entrada/linhas_mae, entrada/linhas_piloto_automatico_plantio  guardadas para o teste de linhas
                        gêmeas (ainda não lidas)
+  entrada/mascara      (opcional) um GeoTIFF de classes (python -m mascaras classificar); se existir,
+                       o perfil das fileiras usa a classe cana dele em vez do ExG + Otsu
   config.yaml          (opcional) configuração da detecção da área; senão usa config_deteccao.yaml
   config_comparacao.yaml (opcional) configuração da comparação
   entrada/mds, entrada/mdt  reservadas para o teste opcional do modelo de terreno (ainda não lidas)
@@ -16,6 +18,7 @@ Convenção de pastas (ver docs/guia-execucao.md):
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from datetime import datetime
@@ -43,8 +46,10 @@ def _rodar(args: list[str], log: Path) -> int:
     print("\n>", " ".join(args), flush=True)
     with log.open("a", encoding="utf-8") as f:
         f.write("\n> " + " ".join(args) + "\n")
+        # o filho escreve em UTF-8 (acentos das mensagens), como este processo lê
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                text=True, encoding="utf-8", errors="replace")
+                                text=True, encoding="utf-8", errors="replace", env=env)
         assert proc.stdout is not None
         for linha in proc.stdout:
             print(linha, end="", flush=True)
@@ -53,6 +58,8 @@ def _rodar(args: list[str], log: Path) -> int:
 
 
 def main(argv: list[str]) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if len(argv) != 2:
         sys.exit("uso: python scripts/rodar_area.py dados/areas/<nome_da_area>")
     area = Path(argv[1]).resolve()
@@ -62,6 +69,7 @@ def main(argv: list[str]) -> int:
     orto = _unico(entrada, ["ortomosaico"], ["*.tif", "*.tiff"], "ortomosaico", True)
     talhoes = _unico(entrada, ["talhoes", "poligonos_talhoes"], ["*.shp", "*.gpkg"], "talhões", True)
     ref = _unico(entrada, ["referencia", "linhas_fileiras_cana_projetadas"], ["*.shp", "*.gpkg"], "referência", False)
+    mascara = _unico(entrada, ["mascara"], ["*.tif", "*.tiff"], "máscara de classes", False)
     config = area / "config.yaml"
     if not config.exists():
         config = CONFIG_PADRAO
@@ -70,12 +78,17 @@ def main(argv: list[str]) -> int:
     saida.mkdir(parents=True)
     log = saida / "log.txt"
     print(f"Área: {area.name}\n  ortomosaico: {orto.name}\n  talhões: {talhoes.name}\n"
-          f"  referência: {ref.name if ref else '(nenhuma, não vai comparar)'}\n  config: {config}\n  saída: {saida}")
+          f"  referência: {ref.name if ref else '(nenhuma, não vai comparar)'}\n"
+          f"  máscara de classes: {mascara.name if mascara else '(nenhuma, perfil sobre ExG + Otsu)'}\n"
+          f"  config: {config}\n  saída: {saida}")
 
     fileiras = saida / "fileiras_detectadas.gpkg"
     py = sys.executable
-    rc = _rodar([py, "-m", "deteccao_linhas", "detectar", "--ortomosaico", str(orto),
-                 "--talhoes", str(talhoes), "--saida", str(fileiras), "--config", str(config)], log)
+    cmd = [py, "-m", "deteccao_linhas", "detectar", "--ortomosaico", str(orto),
+           "--talhoes", str(talhoes), "--saida", str(fileiras), "--config", str(config)]
+    if mascara:
+        cmd += ["--mascara", str(mascara)]
+    rc = _rodar(cmd, log)
     if rc != 0:
         print(f"\nA detecção terminou com erro (código {rc}). Veja a mensagem acima e {log}.")
         return rc

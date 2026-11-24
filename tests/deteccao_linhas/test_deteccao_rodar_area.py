@@ -74,3 +74,15 @@ def test_rodar_area_aceita_nomes_alternativos_das_pastas(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
     exec_ = [p for p in (area / "saida").iterdir() if p.is_dir()][0]
     assert (exec_ / "relatorio_comparacao.json").exists()
+
+
+def test_rodar_area_usa_mascara_se_existir(tmp_path):
+    """Com um GeoTIFF em entrada/mascara, a detecção roda com perfil sobre a máscara de classes."""
+    from test_deteccao_fonte_mascara import gerar_mascara
+
+    area = _area(tmp_path, com_ref=False)
+    (area / "entrada/mascara").mkdir()
+    gerar_mascara(area / "entrada/mascara/m.tif")
+    r = _rodar(area)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "perfil sobre a m" in r.stdout
