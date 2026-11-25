@@ -45,6 +45,12 @@ class ConfigMascaras:
     # na area_01 isso rotulou folha de cana como daninha.
     daninha_por_posicao: bool = False
 
+    # Etapa 2: objetos (superpixels do verde) classificados com amostras pontuais. Tudo HIPÓTESE.
+    tamanho_segmento_m: float = 0.30  # lado típico de um superpixel (SLIC)
+    compacidade_slic: float = 10.0  # equilíbrio cor x forma no SLIC
+    halo_objetos_m: float = 1.0  # borda lida em volta de cada janela, para o segmento não ser cortado
+    usar_posicao: bool = True  # inclui distância e alinhamento às fileiras detectadas nos atributos
+
     # Saída da classificação
     gravar_probabilidade_cana: bool = False
 
@@ -54,10 +60,11 @@ class ConfigMascaras:
 
         if len(self.bandas_rgb) != 3 or any(int(b) < 1 for b in self.bandas_rgb):
             erro("bandas_rgb deve ter três números de banda (base 1).")
-        for nome in ("resolucao_trabalho_m", "largura_faixa_m", "meia_largura_zona_m"):
+        for nome in ("resolucao_trabalho_m", "largura_faixa_m", "meia_largura_zona_m", "tamanho_segmento_m",
+                     "compacidade_slic"):
             if not float(getattr(self, nome)) > 0:
                 erro(f"{nome} deve ser > 0.")
-        for nome in ("buffer_interno_m", "margem_faixa_m", "sombra_brilho_max"):
+        for nome in ("buffer_interno_m", "margem_faixa_m", "sombra_brilho_max", "halo_objetos_m"):
             if float(getattr(self, nome)) < 0:
                 erro(f"{nome} deve ser >= 0.")
         if self.lado_janela_px < 256 or self.lado_janela_px % 256:

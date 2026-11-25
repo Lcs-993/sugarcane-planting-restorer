@@ -79,7 +79,7 @@ Use `scripts\mascaras.bat`. Com dois cliques, ele mostra um menu com os quatro p
 
 Cada passo grava um `log.txt` em `saida\<data_hora>_mascaras_<passo>\`. O do treino fica ao lado do modelo.
 
-Parâmetros: `config_mascaras.yaml` da raiz, ou o da pasta da área, se existir (passos pseudo e classificar). O treino usa o da raiz. Em qualquer passo, `--config <arquivo>` no fim da linha passa por cima.
+Parâmetros: `config_mascaras.yaml` da raiz, ou o da pasta da área, se existir (passos pseudo e classificar, e treino com uma área só). O treino com várias áreas usa o da raiz. Em qualquer passo, `--config <arquivo>` no fim da linha passa por cima.
 
 Regras:
 - `resolucao_trabalho_m` precisa ser igual em `config_mascaras.yaml` e na configuração da detecção (padrão 0,06 m). Se for diferente, a detecção para e avisa.
@@ -87,3 +87,12 @@ Regras:
 - O arquivo `.joblib` é um pickle: só carregue modelos gerados por este projeto.
 - O que decide se a máscara ajuda é a comparação da detecção (ExG + Otsu contra máscara) com a referência de campo RTK, não o IoU.
 - Para rodar os comandos à mão: `python -m mascaras --help` (ambiente ativado com `.venv\Scripts\activate.bat`, e `set PROJ_LIB=` se for o caso da seção 1).
+
+### 5.1 Etapa 2: cana x daninha com amostras pontuais
+
+Para separar cana de daninha, principalmente com daninha na entrelinha (docs/escopo-mascaras.md, seção 12). Não usa os pseudo-rótulos: aprende com pontos marcados por você.
+
+1. **Pontos.** Ponha em `entrada\amostras_pontos` um GeoPackage de pontos com o campo `classe` (`cana` ou `daninha`) e marque um ponto no centro de cada touceira ou mancha. Privilegie os casos difíceis: daninha na entrelinha, daninha encostada na fileira, folha de cana avançando na entrelinha. Para a validação funcionar, precisa haver cana e daninha em pelo menos dois talhões.
+2. **Detecção sem máscara** na área (`scripts\rodar_area.bat`), porque a posição em relação às fileiras é um dos atributos.
+3. **Treino:** `scripts\mascaras.bat objetos-treinar objetos1 area_01`, ou o passo 5 do menu. A janela mostra o acerto de cana e de daninha com cada talhão deixado de fora, com e sem os atributos de posição.
+4. **Classificação:** `scripts\mascaras.bat objetos-classificar area_01 objetos1`, ou o passo 6 do menu. Grava `entrada\mascara\mascara.tif`, que o `rodar_area.bat` passa a usar.

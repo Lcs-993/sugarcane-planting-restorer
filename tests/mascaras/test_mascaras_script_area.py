@@ -94,3 +94,27 @@ def test_erros_claros(tmp_path):
             (p / "log.txt").write_text("--mascara\n", encoding="utf-8")
     r = _rodar("pseudo", area, "--config", cfg)
     assert r.returncode != 0 and "nenhuma detecção sem máscara" in r.stderr
+
+
+def test_etapa2_objetos(tmp_path):
+    """objetos-treinar e objetos-classificar com os pontos de entrada/amostras_pontos."""
+    from test_mascaras_objetos import _amostras
+
+    area, cfg = _area(tmp_path), _cfg(tmp_path)
+    dan = manchas_daninha(30, 30, n=40, raio_m=0.30, semente=2)
+    gerar_orto(area / "entrada/ortomosaico/o.tif", daninhas=dan)
+    (area / "entrada/amostras_pontos").mkdir()
+    _amostras(area / "entrada/amostras_pontos/a.gpkg", dan)
+
+    modelo = tmp_path / "modelos/obj.joblib"
+    r = _rodar("objetos-treinar", modelo, area, "--config", cfg)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "deixando um talhão de fora" in r.stdout and modelo.exists()
+
+    r = _rodar("objetos-classificar", area, modelo, "--config", cfg)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "2026-01-01_000000" in r.stdout  # usa a detecção sem máscara
+    assert (area / "entrada/mascara/mascara.tif").exists()
+
+    r = _rodar("objetos-treinar", tmp_path / "m2.joblib", _area(tmp_path, "sem_pontos"), "--config", cfg)
+    assert r.returncode != 0 and "amostras pontuais" in r.stderr

@@ -6,6 +6,8 @@ Só chama a linha de comando já existente (python -m mascaras); não tem lógic
   treinar     <modelo> <área> [<área>...] treina o classificador com os rótulos das áreas
   classificar <área> <modelo>             grava entrada/mascara/mascara.tif (usado pelo rodar_area)
   avaliar     <área>                      IoU contra os polígonos de entrada/teste_mascara
+  objetos-treinar     <modelo> <área> [<área>...]  etapa 2: cana x daninha com os pontos de entrada/amostras_pontos
+  objetos-classificar <área> <modelo>              etapa 2: grava entrada/mascara/mascara.tif
 
 <área> é o nome de uma pasta em dados/areas (ou um caminho). <modelo> é um nome, gravado em
 dados/modelos/<nome>.joblib (ou um caminho terminado em .joblib).
@@ -13,6 +15,7 @@ Pastas usadas na área, além das do rodar_area:
   entrada/correcoes_mascara  (opcional) polígonos com o campo "classe" que corrigem os pseudo-rótulos
   entrada/teste_mascara      polígonos de teste desenhados à mão, com o campo "classe" (só para avaliar)
   rotulos/                   rótulos gerados (rotulos.tif e rotulos.json); refeitos a cada "pseudo"
+  entrada/amostras_pontos    pontos com o campo "classe" (cana ou daninha), para a etapa 2
 Configuração: config_mascaras.yaml da área, senão o da raiz; --config <arquivo> passa por cima.
 """
 from __future__ import annotations
@@ -110,10 +113,8 @@ def treinar(modelo: Path, areas: list[Path], cfg: Path, py: str) -> int:
     return _rodar(cmd, log)
 
 
-def classificar(area: Path, modelo: Path, cfg: Path, py: str) -> int:
-    if not modelo.is_file():
-        sys.exit(f"ERRO: modelo {modelo} não encontrado. Rode antes o passo treinar.")
-    orto, talhoes = _orto_talhoes(area)
+def _saida_mascara(area: Path) -> Path:
+    """entrada/mascara/mascara.tif; para se houver outro GeoTIFF na pasta (o rodar_area aceita um só)."""
     pasta = area / "entrada" / "mascara"
     pasta.mkdir(parents=True, exist_ok=True)
     saida = pasta / "mascara.tif"
@@ -121,6 +122,15 @@ def classificar(area: Path, modelo: Path, cfg: Path, py: str) -> int:
     if outros:
         sys.exit(f"ERRO: já há outro(s) GeoTIFF em {pasta} ({', '.join(outros)}). Tire-os de lá: o rodar_area "
                  "aceita um só arquivo nessa pasta.")
+    return saida
+
+
+def classificar(area: Path, modelo: Path, cfg: Path, py: str) -> int:
+    if not modelo.is_file():
+        sys.exit(f"ERRO: modelo {modelo} não encontrado. Rode antes o passo treinar.")
+    orto, talhoes = _orto_talhoes(area)
+    saida = _saida_mascara(area)
+    pasta = saida.parent
     execucao = _pasta_execucao(area, "classificar")
     print(f"Área: {area.name}\n  modelo: {modelo}\n  config: {cfg}\n  máscara: {saida} (substituída se existir)")
     rc = _rodar([py, "-m", "mascaras", "classificar", "--ortomosaico", str(orto), "--talhoes", str(talhoes),
@@ -129,6 +139,36 @@ def classificar(area: Path, modelo: Path, cfg: Path, py: str) -> int:
     if prob.exists():  # fora de entrada/mascara, senão o rodar_area acharia dois GeoTIFF
         prob.replace(execucao / prob.name)
         print(f"Probabilidade da classe cana movida para {execucao / prob.name}")
+    if rc == 0:
+        print(f"\nPronto. Agora rode scripts\\rodar_area.bat {area.name}: a detecção vai usar a máscara.")
+    return rc
+
+
+def objetos_treinar(modelo: Path, areas: list[Path], cfg: Path, py: str) -> int:
+    cmd = [py, "-m", "mascaras", "objetos-treinar", "--modelo", str(modelo), "--config", str(cfg)]
+    for area in areas:
+        orto, talhoes = _orto_talhoes(area)
+        amostras = _unico(area / "entrada", ["amostras_pontos"], ["*.gpkg", "*.shp"], "amostras pontuais", True)
+        cmd += ["--area", str(orto), str(talhoes), str(ultima_deteccao_sem_mascara(area)), str(amostras)]
+    modelo.parent.mkdir(parents=True, exist_ok=True)
+    log = modelo.with_name(modelo.stem + "_log.txt")
+    print(f"Modelo (etapa 2, objetos): {modelo}\n  áreas: {', '.join(a.name for a in areas)}\n  config: {cfg}\n"
+          "  A validação deixa um talhão de fora por vez: precisa de cana e daninha em pelo menos dois talhões.")
+    return _rodar(cmd, log)
+
+
+def objetos_classificar(area: Path, modelo: Path, cfg: Path, py: str) -> int:
+    if not modelo.is_file():
+        sys.exit(f"ERRO: modelo {modelo} não encontrado. Rode antes o passo objetos-treinar.")
+    orto, talhoes = _orto_talhoes(area)
+    saida = _saida_mascara(area)
+    det = ultima_deteccao_sem_mascara(area)
+    execucao = _pasta_execucao(area, "objetos_classificar")
+    print(f"Área: {area.name}\n  modelo: {modelo}\n  fileiras: {det.parent.name}\n  config: {cfg}\n"
+          f"  máscara: {saida} (substituída se existir)")
+    rc = _rodar([py, "-m", "mascaras", "objetos-classificar", "--ortomosaico", str(orto), "--talhoes", str(talhoes),
+                 "--deteccao", str(det), "--modelo", str(modelo), "--saida", str(saida), "--config", str(cfg)],
+                execucao / "log.txt")
     if rc == 0:
         print(f"\nPronto. Agora rode scripts\\rodar_area.bat {area.name}: a detecção vai usar a máscara.")
     return rc
@@ -164,11 +204,16 @@ def main(argv: list[str]) -> int:
     if passo == "pseudo" and len(resto) == 1:
         area = _area(resto[0])
         return pseudo(area, _config(area, forcada), py)
-    if passo == "treinar" and len(resto) >= 2:
-        return treinar(_modelo(resto[0]), [_area(a) for a in resto[1:]], _config(None, forcada), py)
-    if passo == "classificar" and len(resto) == 2:
+    if passo in ("treinar", "objetos-treinar") and len(resto) >= 2:
+        areas = [_area(a) for a in resto[1:]]
+        # com uma área só, vale o config_mascaras.yaml dela (ex.: campo_id_talhao); com várias, o da raiz
+        cfg = _config(areas[0] if len(areas) == 1 else None, forcada)
+        funcao = treinar if passo == "treinar" else objetos_treinar
+        return funcao(_modelo(resto[0]), areas, cfg, py)
+    if passo in ("classificar", "objetos-classificar") and len(resto) == 2:
         area = _area(resto[0])
-        return classificar(area, _modelo(resto[1]), _config(area, forcada), py)
+        funcao = classificar if passo == "classificar" else objetos_classificar
+        return funcao(area, _modelo(resto[1]), _config(area, forcada), py)
     if passo == "avaliar" and len(resto) == 1:
         return avaliar(_area(resto[0]), py)
     sys.exit("uso: python scripts/mascaras_area.py <passo> ...\n" + USO)
