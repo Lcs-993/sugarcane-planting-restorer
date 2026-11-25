@@ -14,11 +14,16 @@ echo   1 pseudo       rotulos de treino a partir da ultima deteccao sem mascara 
 echo   2 treinar      treina o modelo com os rotulos de uma ou mais areas
 echo   3 classificar  grava a mascara em entrada\mascara de uma area
 echo   4 avaliar      IoU contra os poligonos de entrada\teste_mascara
-set /p PASSO=Passo (1 a 4):
+echo   Etapa 2 (cana x daninha com os pontos de entrada\amostras_pontos):
+echo   5 objetos-treinar      treina com os pontos de uma ou mais areas
+echo   6 objetos-classificar  grava a mascara em entrada\mascara de uma area
+set /p PASSO=Passo (1 a 6):
 if "%PASSO%"=="1" goto pseudo
 if "%PASSO%"=="2" goto treinar
 if "%PASSO%"=="3" goto classificar
 if "%PASSO%"=="4" goto avaliar
+if "%PASSO%"=="5" goto objetos_treinar
+if "%PASSO%"=="6" goto objetos_classificar
 echo Passo invalido. & pause & exit /b 1
 
 :pseudo
@@ -41,6 +46,18 @@ goto fim
 :avaliar
 set /p AREA=Nome da area:
 %PY% avaliar %AREA%
+goto fim
+
+:objetos_treinar
+set /p MODELO=Nome do modelo (ex.: objetos1):
+set /p AREAS=Areas com pontos, separadas por espaco (ex.: area_01 area_02):
+%PY% objetos-treinar %MODELO% %AREAS%
+goto fim
+
+:objetos_classificar
+set /p AREA=Nome da area a classificar:
+set /p MODELO=Nome do modelo (ex.: objetos1):
+%PY% objetos-classificar %AREA% %MODELO%
 goto fim
 
 :fim

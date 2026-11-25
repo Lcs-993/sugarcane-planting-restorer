@@ -104,6 +104,7 @@ Risco conhecido: o modelo herda os erros do método atual. Por isso nenhuma mét
 | M4 | Pseudo-rótulos de trechos confiáveis bastam para treinar sem rotulagem manual extensa. |
 | M5 | Um modelo treinado uma vez em vários talhões vale para talhões novos da mesma região. |
 | M6 | Para localizar o centro da fileira, uma máscara só do miolo da fileira, sem a borda da folha, é melhor que a máscara da cana inteira (seção 11.1). |
+| M7 | Dentro do verde, superpixels com atributos de cor, textura, forma e posição em relação às fileiras, treinados com amostras pontuais, separam cana de daninha, inclusive na entrelinha (seção 12). |
 
 ## 10. Pendências
 1. Ambiente de treino do nível 2: GPU local ou Google Colab.
@@ -158,6 +159,30 @@ Três talhões, cana nova. O modelo foi treinado e aplicado na mesma área. A re
 - Inspeção no QGIS: na máscara 1, a "daninha" era sobretudo a borda da folha da cana, que passa da faixa mais a margem. Daí a decisão da seção 2, item 8.
 - A máscara 2 acha a cana inteira e repete o ExG + Otsu na detecção. Sem daninha no treino, ela é um "verde contra solo" aprendido.
 - O ganho da máscara 1 parece vir de tirar a borda da folha e deixar só o miolo da fileira (hipótese M6), não de separar daninha. A confirmação depende do RTK e de um teste em área fora do treino.
+- Verde por distância à fileira detectada (máscara 2, 10 a 12 janelas de 61 m por talhão). No meio da entrelinha (72 a 78 cm), o verde foi de 3% no talhão 1, 16% no talhão 2 e 44% no talhão 3. No talhão 3, o valor sobe um pouco no centro, um indício fraco de vegetação na própria entrelinha. Onde há verde na entrelinha, a posição sozinha não separa folha de cana de daninha. Isso motivou a seção 12.
 
-## 12. Fora deste escopo
+## 12. Etapa 2: cana x daninha por objetos, com amostras pontuais
+
+Motivação: o maior problema é separar cana de daninha, principalmente com infestação na entrelinha (2026-11-24). Pseudo-rótulo por posição não serve para isso (seção 11.1). O caminho foi decidido com o usuário: primeiro a máscara do verde, depois a segmentação dela com amostras coletadas.
+
+1. Etapa 1, vegetação: ExG normalizado ≥ Otsu do talhão, o mesmo critério dos pseudo-rótulos.
+2. Etapa 2, objetos: o verde de cada janela é dividido em superpixels (SLIC, `tamanho_segmento_m` = 0,30 m; hipótese). Cada superpixel recebe atributos:
+   - cor: média de R, G, B, ExG e GLI;
+   - textura: desvio do ExG, desvio do cinza, gradiente médio;
+   - forma: área e alongamento;
+   - posição, com `usar_posicao`: distância média e mínima às fileiras detectadas, fração dentro da faixa, alinhamento com a direção das fileiras.
+3. Amostras: pontos com o campo `classe` (cana ou daninha) em `entrada/amostras_pontos`. Cada ponto rotula o superpixel onde cai. São descartados e contados os pontos fora da área útil, fora do verde ou em conflito (duas classes no mesmo superpixel). O GeoPackage tem estilo e formulário embutidos, e o campo `origem` diz se o ponto foi marcado na imagem ou em campo.
+4. Modelo: Random Forest com `class_weight="balanced"`.
+5. Validação: deixando um talhão de fora por vez. O talhão só é testado se o treino restante tiver as duas classes. A validação é feita com e sem os atributos de posição, para medir o peso deles. Nenhum limite de aceitação é fixado.
+6. Saída: GeoTIFF com os códigos da seção 3 (cana e daninha no verde, fundo no resto da área útil), lido pela detecção com `--mascara`.
+
+Decisões de implementação:
+
+- O SLIC roda na janela inteira e depois é recortado pelo verde. Com `mask=`, o scikit-image 0,26 levou 442 s numa janela de 1024 px da area_01; sem ela, 1,2 s, com o superpixel mediano 100% verde.
+- As janelas seguem uma grade fixa (múltiplos de `lado_janela_px`) e são lidas com borda (`halo_objetos_m` = 1 m). Assim, o treino e a classificação segmentam igual.
+- As fileiras usadas na posição vêm da última detecção sem máscara (ExG + Otsu). Se a daninha tiver deslocado a detecção, o atributo de posição herda esse erro.
+
+Riscos: daninha gramínea pode ter cor e textura de cana. Superpixel grudado entre cana e daninha recebe uma classe só. Ainda não há fonte lida sobre o tema; a literatura de análise por objetos para daninha em imagem de drone está pendente de leitura.
+
+## 13. Fora deste escopo
 Detecção de plantas individuais, modelos de linguagem ou de visão por API, transformada de Hough, operações morfológicas como refino (Ribeiro, 2023, não viu melhora), e plugin QGIS.

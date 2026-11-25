@@ -19,6 +19,7 @@ from pathlib import Path
 from .avaliacao import avaliar
 from .config import carregar_config
 from .inferencia import classificar
+from .objetos_modelo import AreaObjetos, classificar_objetos, treinar_objetos
 from .pseudo_rotulos import gerar_pseudo_rotulos
 from .tipos import ErroMascaras
 from .treino import ParTreino, treinar
@@ -50,11 +51,42 @@ def _parser() -> argparse.ArgumentParser:
     c.add_argument("--saida", required=True, type=Path)
     c.add_argument("--config", type=Path, default=None)
 
+    ot = sub.add_parser("objetos-treinar",
+                        help="etapa 2: treina cana x daninha por superpixel com amostras pontuais")
+    ot.add_argument("--area", nargs=4, action="append", required=True, type=str,
+                    metavar=("ORTOMOSAICO", "TALHOES", "DETECCAO", "AMOSTRAS"),
+                    help="repita por área; DETECCAO = fileiras_detectadas.gpkg ou '-' (só com usar_posicao: false)")
+    ot.add_argument("--modelo", required=True, type=Path)
+    ot.add_argument("--config", type=Path, default=None)
+
+    oc = sub.add_parser("objetos-classificar", help="etapa 2: grava a máscara cana x daninha x fundo")
+    oc.add_argument("--ortomosaico", required=True, type=Path)
+    oc.add_argument("--talhoes", required=True, type=Path)
+    oc.add_argument("--deteccao", type=Path, default=None, help="obrigatório se o modelo usa posição")
+    oc.add_argument("--modelo", required=True, type=Path)
+    oc.add_argument("--saida", required=True, type=Path)
+    oc.add_argument("--config", type=Path, default=None)
+
     a = sub.add_parser("avaliar", help="IoU e matriz de confusão contra polígonos de teste manuais")
     a.add_argument("--mascara", required=True, type=Path)
     a.add_argument("--teste", required=True, type=Path, help="polígonos revisados com o campo 'classe'")
     a.add_argument("--relatorio", type=Path, default=None, help="grava o relatório em JSON")
     return p
+
+
+def _imprimir_validacao(validacao: dict) -> None:
+    print("Validação deixando um talhão de fora (o modelo nunca vê o talhão testado):")
+    for variante, res in validacao.items():
+        g = res.get("global")
+        if g is None:
+            print(f"  {variante}: sem talhão testável ({res['pulados']})")
+            continue
+        print(f"  {variante}: n={g['n']} acerto cana={g['acerto_cana']} acerto daninha={g['acerto_daninha']} "
+              f"acurácia={g['acuracia']}")
+        for t, r in res["por_talhao"].items():
+            print(f"    {t}: n={r['n']} cana={r['acerto_cana']} daninha={r['acerto_daninha']}")
+        for t, motivo in res["pulados"].items():
+            print(f"    {t}: pulado ({motivo})")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -79,6 +111,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Máscara gravada em {res.caminho_mascara}; pixels por classe: {res.pixels_por_classe}")
             if res.caminho_probabilidade:
                 print(f"Probabilidade da classe cana em {res.caminho_probabilidade}")
+        elif args.comando == "objetos-treinar":
+            cfg = carregar_config(args.config)
+            areas = [AreaObjetos(Path(o), Path(t), None if d == "-" else Path(d), Path(a), nome=Path(o).stem)
+                     for o, t, d, a in args.area]
+            meta = treinar_objetos(areas, args.modelo, cfg)
+            print(f"Modelo gravado em {args.modelo}; amostras {meta.amostras_por_classe}; "
+                  f"descartadas {meta.descartes}")
+            _imprimir_validacao(meta.validacao)
+        elif args.comando == "objetos-classificar":
+            cfg = carregar_config(args.config)
+            cont = classificar_objetos(AreaObjetos(args.ortomosaico, args.talhoes, args.deteccao), args.modelo,
+                                       args.saida, cfg)
+            print(f"Máscara gravada em {args.saida}; pixels por classe: {cont}")
         else:
             rel = avaliar(args.mascara, args.teste)
             print(rel.aviso)

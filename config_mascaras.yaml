@@ -30,3 +30,9 @@ daninha_por_posicao: false         # foco na cana: verde fora da faixa fica igno
 
 # Classificação
 gravar_probabilidade_cana: false
+
+# Etapa 2: cana x daninha por objetos, com amostras pontuais (docs/escopo-mascaras.md, seção 12)
+tamanho_segmento_m: 0.30           # HIPÓTESE; lado típico de um superpixel
+compacidade_slic: 10.0             # HIPÓTESE; equilíbrio cor x forma no SLIC
+halo_objetos_m: 1.0                # borda lida em volta de cada janela
+usar_posicao: true                 # HIPÓTESE; distância e alinhamento às fileiras detectadas

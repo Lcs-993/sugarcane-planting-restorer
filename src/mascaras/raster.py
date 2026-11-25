@@ -76,7 +76,12 @@ def ler_vetor(caminho: Path, rotulo: str) -> gpd.GeoDataFrame:
     if caminho.suffix.lower() not in EXTENSOES_VETORIAIS:
         raise ErroLeitura(f"formato de {rotulo} não suportado ({caminho.suffix}); use .gpkg ou .shp")
     try:
-        return gpd.read_file(caminho)
+        camada = None
+        if caminho.suffix.lower() == ".gpkg":  # ignora a tabela de estilos que o QGIS grava no GeoPackage
+            import pyogrio
+            camadas = [str(n) for n, tipo in pyogrio.list_layers(caminho) if n != "layer_styles"]
+            camada = camadas[0] if camadas else None
+        return gpd.read_file(caminho, layer=camada)
     except Exception as exc:  # pyogrio levanta tipos variados
         raise ErroLeitura(f"não foi possível ler {rotulo} em {caminho}: {exc}") from exc
 
